@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="桃園嘉義行">
+  <meta name="theme-color" content="#f6efe5">
+  <title>桃園嘉義行動導覽</title>
+  <style>
+    :root {
+      --bg: #f6efe5;
+      --bg-soft: #fffaf4;
+      --surface: rgba(255, 250, 244, 0.92);
+      --surface-strong: #fffdf9;
+      --text: #2d2117;
+      --muted: #715f4f;
+      --accent: #bf5a36;
+      --accent-strong: #9e3f1d;
+      --accent-soft: #f2c7a2;
+      --line: rgba(191, 90, 54, 0.18);
+      --shadow: 0 18px 40px rgba(78, 48, 28, 0.14);
+      --radius-lg: 24px;
+      --radius-md: 18px;
+      --radius-sm: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      -webkit-text-size-adjust: 100%;
+      background: #f6efe5;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding-top: env(safe-area-inset-top);
+      padding-right: env(safe-area-inset-right);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(255, 205, 149, 0.68), transparent 34%),
+        radial-gradient(circle at top right, rgba(221, 129, 76, 0.28), transparent 30%),
+        linear-gradient(180deg, #f9f2e7 0%, #f3eadf 46%, #efe7df 100%);
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      inset: auto;
+      z-index: 0;
+      pointer-events: none;
+      filter: blur(10px);
+    }
+
+    body::before {
+      width: 220px;
+      height: 220px;
+      right: -60px;
+      top: 22%;
+      border-radius: 40% 60% 55% 45%;
+      background: rgba(191, 90, 54, 0.11);
+    }
+
+    body::after {
+      width: 180px;
+      height: 180px;
+      left: -50px;
+      bottom: 8%;
+      border-radius: 62% 38% 46% 54%;
+      background: rgba(241, 181, 122, 0.2);
+    }
+
+    main {
+      position: relative;
+      z-index: 1;
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 20px 16px 28px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 22px 20px 20px;
+      border-radius: 30px;
+      background: linear-gradient(145deg, rgba(255, 248, 240, 0.96), rgba(247, 233, 216, 0.92));
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(255, 255, 255, 0.72);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -28px;
+      top: -18px;
+      width: 140px;
+      height: 140px;
+      border-radius: 46% 54% 40% 60%;
+      background: linear-gradient(135deg, rgba(191, 90, 54, 0.18), rgba(242, 199, 162, 0.02));
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(191, 90, 54, 0.08);
+      color: var(--accent-strong);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    h1 {
+      margin: 14px 0 10px;
+      font-size: clamp(1.95rem, 5.2vw, 3rem);
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+    }
+
+    .hero-copy {
+      position: relative;
+      z-index: 1;
+      max-width: 32rem;
+      margin: 0 0 18px;
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 0.98rem;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .summary-card {
+      padding: 14px 12px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+    }
+
+    .summary-card strong {
+      display: block;
+      font-size: 1.15rem;
+      margin-bottom: 4px;
+    }
+
+    .summary-card span {
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+
+    .panel {
+      margin-top: 18px;
+      padding: 14px;
+      border-radius: 26px;
+      background: rgba(255, 248, 242, 0.78);
+      box-shadow: 0 14px 28px rgba(87, 56, 38, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.75);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .tab-button {
+      appearance: none;
+      border: 0;
+      padding: 14px 10px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.8);
+      color: var(--muted);
+      font: inherit;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      transition: transform 180ms ease, background 180ms ease, color 180ms ease, box-shadow 180ms ease;
+      box-shadow: inset 0 0 0 1px rgba(191, 90, 54, 0.08);
+    }
+
+    .tab-button[aria-selected="true"] {
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+      box-shadow: 0 14px 24px rgba(158, 63, 29, 0.28);
+      transform: translateY(-1px);
+    }
+
+    .day-section {
+      display: none;
+      margin-top: 14px;
+    }
+
+    .day-section.active {
+      display: block;
+      animation: rise 260ms ease;
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .day-header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 8px 6px;
+    }
+
+    .day-header h2 {
+      margin: 0;
+      font-size: 1.32rem;
+    }
+
+    .day-header p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .day-pill {
+      flex-shrink: 0;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(191, 90, 54, 0.08);
+      color: var(--accent-strong);
+      font-size: 0.83rem;
+      font-weight: 700;
+    }
+
+    .timeline {
+      position: relative;
+      display: grid;
+      gap: 14px;
+      margin-top: 10px;
+      padding-left: 18px;
+    }
+
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 32px;
+      top: 10px;
+      bottom: 10px;
+      width: 2px;
+      background: linear-gradient(180deg, rgba(191, 90, 54, 0.28), rgba(191, 90, 54, 0.06));
+    }
+
+    .stop {
+      position: relative;
+      display: grid;
+      grid-template-columns: 62px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .time {
+      position: relative;
+      padding-top: 10px;
+      font-size: 0.92rem;
+      font-weight: 800;
+      color: var(--accent-strong);
+      letter-spacing: 0.01em;
+    }
+
+    .time::after {
+      content: "";
+      position: absolute;
+      top: 16px;
+      right: -9px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 5px rgba(191, 90, 54, 0.12);
+    }
+
+    .time.unscheduled {
+      color: #8b725f;
+    }
+
+    .time.unscheduled::after {
+      background: #baa595;
+      box-shadow: 0 0 0 5px rgba(186, 165, 149, 0.16);
+    }
+
+    .card {
+      padding: 16px;
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      border: 1px solid rgba(255, 255, 255, 0.75);
+      box-shadow: 0 12px 22px rgba(84, 61, 42, 0.08);
+    }
+
+    .card.highlight {
+      background: linear-gradient(140deg, rgba(255, 249, 243, 0.97), rgba(252, 234, 221, 0.92));
+      border-color: rgba(191, 90, 54, 0.16);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .card h3 {
+      margin: 0;
+      font-size: 1.08rem;
+      line-height: 1.35;
+    }
+
+    .badge {
+      flex-shrink: 0;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(191, 90, 54, 0.1);
+      color: var(--accent-strong);
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    .note {
+      margin: 10px 0 0;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 0.92rem;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .button,
+    .parking-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 0 16px;
+      border-radius: 999px;
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+      text-decoration: none;
+      font-weight: 700;
+      box-shadow: 0 12px 20px rgba(158, 63, 29, 0.22);
+    }
+
+    button,
+    a {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button {
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    .button.secondary {
+      color: var(--accent-strong);
+      background: rgba(191, 90, 54, 0.08);
+      box-shadow: none;
+    }
+
+    .parking {
+      margin-top: 16px;
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(252, 243, 234, 0.92);
+      border: 1px solid rgba(191, 90, 54, 0.12);
+    }
+
+    .parking h4 {
+      margin: 0 0 10px;
+      font-size: 0.98rem;
+    }
+
+    .parking-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .parking-item {
+      padding: 12px;
+      border-radius: 16px;
+      background: var(--surface-strong);
+      border: 1px solid rgba(191, 90, 54, 0.08);
+    }
+
+    .parking-item strong {
+      display: block;
+      margin-bottom: 10px;
+      line-height: 1.45;
+      font-size: 0.92rem;
+    }
+
+    .footer {
+      margin-top: 18px;
+      padding: 18px 20px 28px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.7;
+      text-align: center;
+    }
+
+    @media (min-width: 720px) {
+      main {
+        padding: 28px 22px 40px;
+      }
+
+      .hero,
+      .panel {
+        border-radius: 34px;
+      }
+
+      .timeline {
+        padding-left: 8px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .summary {
+        grid-template-columns: 1fr;
+      }
+
+      .tabs {
+        grid-template-columns: 1fr;
+      }
+
+      .day-header {
+        flex-direction: column;
+        align-items: start;
+      }
+
+      .stop {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      .timeline {
+        padding-left: 0;
+      }
+
+      .timeline::before {
+        left: 6px;
+      }
+
+      .time {
+        padding-left: 22px;
+        padding-top: 0;
+      }
+
+      .time::after {
+        left: 1px;
+        right: auto;
+        top: 3px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <div class="eyebrow">2026 / 05 / 01 - 05 / 03</div>
+      <h1>桃園嘉義行<br>手機導覽</h1>
+      <p class="hero-copy">
+        依照行程整理成手機閱讀版，切換日期後就能直接查看景點、飯店與可導航連結。第三天已把燒瓶子附近停車場一起放進去，出發前打開這頁即可使用。
+      </p>
+      <div class="summary" aria-label="行程摘要">
+        <div class="summary-card">
+          <strong>3 天</strong>
+          <span>桃園到嘉義行程</span>
+        </div>
+        <div class="summary-card">
+          <strong>17 個</strong>
+          <span>已整理停靠點</span>
+        </div>
+        <div class="summary-card">
+          <strong>4 個</strong>
+          <span>可直接開地圖地點</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="每日行程">
+      <div class="tabs" role="tablist" aria-label="行程天數切換">
+        <button class="tab-button" id="tab-day1" type="button" role="tab" aria-selected="true" aria-controls="day1">第一天</button>
+        <button class="tab-button" id="tab-day2" type="button" role="tab" aria-selected="false" aria-controls="day2">第二天</button>
+        <button class="tab-button" id="tab-day3" type="button" role="tab" aria-selected="false" aria-controls="day3">第三天</button>
+      </div>
+
+      <section class="day-section active" id="day1" role="tabpanel" aria-labelledby="tab-day1">
+        <div class="day-header">
+          <div>
+            <h2>第一天</h2>
+            <p>桃園出發，家聚與晚餐後入住青埔商旅。</p>
+          </div>
+          <div class="day-pill">5/1 Fri</div>
+        </div>
+        <div class="timeline">
+          <article class="stop">
+            <div class="time">07:00</div>
+            <div class="card">
+              <div class="card-header">
+                <h3>小寶貝家出發</h3>
+              </div>
+              <p class="note">早上出門，正式開始三天行程。</p>
+            </div>
+          </article>
+
+          <article class="stop">
+            <div class="time">08:00</div>
+            <div class="card highlight">
+              <div class="card-header">
+                <h3>吃早餐・仁德休息站・星巴克</h3>
+                <span class="badge">導航</span>
+              </div>
+              <p class="note">路途中先休息補給，適合在這裡吃早餐與短暫停留。</p>
+              <div class="actions">
+                <a class="button" href="https://maps.app.goo.gl/NP2wMzuQbQFQT1oP6" target="_blank" rel="noreferrer">開啟地圖</a>
+              </div>
+            </div>
+          </article>
+
+          <article class="stop">
+            <div class="time">12:00</div>
+            <div class="card">
+              <div class="card-header">
+                <h3>羽駿家</h3>
+              </div>
+            </div>
+          </article>
+
+          <article class="stop">
+            <div class="time">13:00</div>
+            <div class="card">
+              <div class="card-header">
+                <h3>彌月活動</h3>
+                <span class="badge">活動</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="stop">
+            <div class="time">15:00</div>
+            <div class="card">
+              <div class="card-header">
+                <h3>出門</h3>
+              </div>
+            </div>
+          </article>
+
+          <article class="stop">
+            <div class="time">18:00</div>
+            <div class="card highlight">
+              <div class="card-header">
+                <h3>一起吃晚餐・薄多義</h3>
+                <span class="badge">晚餐</span>
+              </div>
+              <p class="note">第一天的正式聚餐地點。</p>
+              <div class="actions">
+                <a class="button" href="https://maps.app.goo.gl/VmShjm65Gk856YRy8?g_st=ic" target="_blank" rel="noreferrer">開啟地圖</a>
+              </div>
+            </div>
+          </article>
+
+          <article class="stop">
+            <div class="time">19:00</div>
+            <div class="card highlight">
+              <div class="card-header">
+                <h3>飯店 Check in・青埔商旅 CP-HOTEL</h3>
+                <span class="badge">住宿</span>
+              </div>
+              <p class="note">第一晚住宿點，抵達後可直接辦理入住。</p>
+              <div class="actions">
+                <a class="button" href="https://maps.app.goo.gl/2cad3ebcL9NkCBRw8" target="_blank" rel="noreferrer">開啟地圖</a>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="day-section" id="day2" role="tabpanel" aria-labelledby="tab-day2">
+        <div class="day-header">
+          <div>
+            <h2>第二天</h2>
+            <p>退房後一路往南，晚上入住嘉義兆品酒店。</p>
+          </div>
+          <div class="day-pill">5/2 Sat</div>
+        </div>
+        <div class="timeline">
+          <article class="stop">
+            <div class="time">11:00</div>
+            <div class="card">
+              <div class="card-header">
+                <h3>退房</h3>
+              </div>
+            </div>
+          </article>
+
+          <article class="stop">
+            <div class="time">12:00</div>
+            <div class="card">
+              <div class="card-header">
+                <h3>華泰名品城</h3>
+              </div>
+            </div>
+          </article>
+
+          <article class="stop">
+            <div class="time">13:00</div>
+            <div class="card">
+              <div class="card-header">
+                <h3>大溪老街</h3>
+              </div>
+            </div>
+          </article>
+
+          <article class="stop">
+            <div class="time">14:30</div>
+            <div class="card">
+              <div class="card-header">
+                <h3>臨時到新竹家一趟</h3>
+                <span class="badge">彈性</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="stop">
+            <div class="time">17:00</div>
+            <div class="card highlight">
+              <div class="card-header">
+                <h3>飯店 Check in・嘉義兆品酒店</h3>
+                <span class="badge">住宿</span>
+              </div>
+              <p class="note">第二晚住宿點，進嘉義後先安頓行李。</p>
+              <div class="actions">
+                <a class="button" href="https://maps.app.goo.gl/Lqcgd2F6hd8nmgGYA" target="_blank" rel="noreferrer">開啟地圖</a>
+              </div>
+            </div>
+          </article>
+
+          <article class="stop">
+            <div class="time">18:00</div>
+            <div class="card">
+              <div class="card-header">
+                <h3>文化路夜市</h3>
+                <span class="badge">晚間</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="day-section" id="day3" role="tabpanel" aria-labelledby="tab-day3">
+        <div class="day-header">
+          <div>
+            <h2>第三天</h2>
+            <p>嘉義市區行程，含餐廳與附近停車場資訊。</p>
+          </div>
+          <div class="day-pill">5/3 Sun</div>
+        </div>
+        <div class="timeline">
+          <article class="stop">
+            <div class="time">12:00</div>
+            <div class="card">
+              <div class="card-header">
+                <h3>退房</h3>
+              </div>
+            </div>
+          </article>
+
+          <article class="stop">
+            <div class="time">13:00</div>
+            <div class="card highlight">
+              <div class="card-header">
+                <h3>燒瓶子。大肆の鍋 嘉義店</h3>
+                <span class="badge">午餐</span>
+              </div>
+              <p class="note">用餐前可直接參考下方停車場資訊，減少抵達後找位時間。</p>
+              <div class="actions">
+                <a class="button" href="https://maps.app.goo.gl/NeZXFbfmpUp5hDw48" target="_blank" rel="noreferrer">餐廳地圖</a>
+              </div>
+              <div class="parking">
+                <h4>附近停車場</h4>
+                <div class="parking-list">
+                  <div class="parking-item">
+                    <strong>CITY PARKING 城市車旅停車場 嘉義民權站</strong>
+                    <a class="parking-link" href="https://maps.app.goo.gl/NeZXFbfmpUp5hDw48" target="_blank" rel="noreferrer">開啟導航</a>
+                  </div>
+                  <div class="parking-item">
+                    <strong>CITY PARKING 城市車旅停車場 中正公園站</strong>
+                    <a class="parking-link" href="https://maps.app.goo.gl/Qg74Yfpb1eYNg2v6A" target="_blank" rel="noreferrer">開啟導航</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="stop">
+            <div class="time">15:00</div>
+            <div class="card">
+              <div class="card-header">
+                <h3>土地公廟</h3>
+              </div>
+            </div>
+          </article>
+
+          <article class="stop">
+            <div class="time">15:30</div>
+            <div class="card">
+              <div class="card-header">
+                <h3>檜意森活村</h3>
+              </div>
+            </div>
+          </article>
+
+          <article class="stop">
+            <div class="time unscheduled">時間未定</div>
+            <div class="card">
+              <div class="card-header">
+                <h3>樂檸漢堡</h3>
+                <span class="badge">彈性安排</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </section>
+
+    <div class="footer">
+      建議把這個頁面加入手機主畫面或書籤，出發當天就能快速切換日期與開啟導航。
+    </div>
+  </main>
+
+  <script>
+    const tabs = document.querySelectorAll('.tab-button');
+    const sections = document.querySelectorAll('.day-section');
+
+    function activateTab(targetId) {
+      tabs.forEach((tab) => {
+        const isActive = tab.getAttribute('aria-controls') === targetId;
+        tab.setAttribute('aria-selected', String(isActive));
+      });
+
+      sections.forEach((section) => {
+        section.classList.toggle('active', section.id === targetId);
+      });
+    }
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => activateTab(tab.getAttribute('aria-controls')));
+    });
+  </script>
+</body>
+</html>
