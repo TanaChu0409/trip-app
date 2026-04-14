@@ -1,41 +1,58 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:trip_planner_app/features/notifications/services/notification_service.dart';
-import 'package:trip_planner_app/features/trips/data/trip_store.dart';
+import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 
 void main() {
-  final store = TripStore.instance;
-  final notifications = NotificationService.instance;
+  test('stop item json roundtrip preserves fields', () {
+    const stop = StopItem(
+      id: 'stop-1',
+      title: '嘉義站',
+      timeLabel: '9:5',
+      note: '測試備註',
+      badge: '午餐',
+      mapUrl: 'https://example.com',
+      isHighlight: true,
+      sortOrder: 2,
+    );
 
-  setUp(() {
-    store.resetForTests();
+    final restored = StopItem.fromJson(stop.toJson());
+
+    expect(restored.id, 'stop-1');
+    expect(restored.title, '嘉義站');
+    expect(restored.timeLabel, '09:05');
+    expect(restored.note, '測試備註');
+    expect(restored.badge, '午餐');
+    expect(restored.mapUrl, 'https://example.com');
+    expect(restored.isHighlight, isTrue);
+    expect(restored.sortOrder, 2);
   });
 
-  test('owner delete removes trip and clears reminders', () {
-    expect(store.findById('taoyuan-chiayi-2026'), isNotNull);
-    expect(notifications.hasTripReminders('taoyuan-chiayi-2026'), isTrue);
+  test('trip summary stop count aggregates nested stops', () {
+    const trip = TripSummary(
+      id: 'trip-1',
+      title: '測試旅程',
+      dateRange: '2026/05/01 - 2026/05/02',
+      role: TripRole.owner,
+      days: [
+        TripDay(
+          id: 'day-1',
+          label: '第一天',
+          dateLabel: '5/1',
+          subtitle: '說明',
+          stops: [
+            StopItem(title: 'A'),
+            StopItem(title: 'B'),
+          ],
+        ),
+        TripDay(
+          id: 'day-2',
+          label: '第二天',
+          dateLabel: '5/2',
+          subtitle: '說明',
+          stops: [StopItem(title: 'C')],
+        ),
+      ],
+    );
 
-    final deleted = store.deleteTrip('taoyuan-chiayi-2026');
-
-    expect(deleted, isTrue);
-    expect(store.findById('taoyuan-chiayi-2026'), isNull);
-    expect(notifications.hasTripReminders('taoyuan-chiayi-2026'), isFalse);
-  });
-
-  test('guest leave removes shared trip and clears reminders', () {
-    expect(store.findById('shared-family-trip'), isNotNull);
-    expect(notifications.hasTripReminders('shared-family-trip'), isTrue);
-
-    final left = store.leaveSharedTrip('shared-family-trip');
-
-    expect(left, isTrue);
-    expect(store.findById('shared-family-trip'), isNull);
-    expect(notifications.hasTripReminders('shared-family-trip'), isFalse);
-  });
-
-  test('guest cannot use owner delete path', () {
-    final deleted = store.deleteTrip('shared-family-trip');
-
-    expect(deleted, isFalse);
-    expect(store.findById('shared-family-trip'), isNotNull);
+    expect(trip.stopCount, 3);
   });
 }

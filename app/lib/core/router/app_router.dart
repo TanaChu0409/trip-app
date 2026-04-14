@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:trip_planner_app/features/auth/presentation/auth_screen.dart';
 import 'package:trip_planner_app/features/auth/data/auth_provider.dart';
 import 'package:trip_planner_app/features/notifications/presentation/navigation_mode_screen.dart';
+import 'package:trip_planner_app/features/trip_detail/presentation/stop_form_screen.dart';
 import 'package:trip_planner_app/features/trip_detail/presentation/trip_detail_screen.dart';
-import 'package:trip_planner_app/features/trips/data/trip_store.dart';
 import 'package:trip_planner_app/features/trips/presentation/trips_list_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -40,22 +40,38 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: ':tripId',
             builder: (context, state) {
               final tripId = state.pathParameters['tripId']!;
-              final trip = TripStore.instance.findById(tripId);
-              if (trip == null) {
-                return const TripsListScreen();
-              }
-              return TripDetailScreen(trip: trip);
+              return TripDetailScreen(tripId: tripId);
             },
             routes: [
+              GoRoute(
+                path: 'days/:dayId/stops/new',
+                builder: (context, state) {
+                  final tripId = state.pathParameters['tripId']!;
+                  final dayId = state.pathParameters['dayId']!;
+                  return StopFormScreen(
+                    tripId: tripId,
+                    dayId: dayId,
+                  );
+                },
+              ),
+              GoRoute(
+                path: 'days/:dayId/stops/:stopId/edit',
+                builder: (context, state) {
+                  final tripId = state.pathParameters['tripId']!;
+                  final dayId = state.pathParameters['dayId']!;
+                  final stopId = state.pathParameters['stopId']!;
+                  return StopFormScreen(
+                    tripId: tripId,
+                    dayId: dayId,
+                    stopId: stopId,
+                  );
+                },
+              ),
               GoRoute(
                 path: 'navigation',
                 builder: (context, state) {
                   final tripId = state.pathParameters['tripId']!;
-                  final trip = TripStore.instance.findById(tripId);
-                  if (trip == null) {
-                    return const TripsListScreen();
-                  }
-                  return NavigationModeScreen(trip: trip);
+                  return NavigationModeScreen(tripId: tripId);
                 },
               ),
             ],

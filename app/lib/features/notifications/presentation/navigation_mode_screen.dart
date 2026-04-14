@@ -1,14 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:trip_planner_app/core/theme/app_theme.dart';
-import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
+import 'package:trip_planner_app/features/trips/data/trip_store.dart';
 
-class NavigationModeScreen extends StatelessWidget {
-  const NavigationModeScreen({super.key, required this.trip});
+class NavigationModeScreen extends StatefulWidget {
+  const NavigationModeScreen({super.key, required this.tripId});
 
-  final TripSummary trip;
+  final String tripId;
+
+  @override
+  State<NavigationModeScreen> createState() => _NavigationModeScreenState();
+}
+
+class _NavigationModeScreenState extends State<NavigationModeScreen> {
+  final TripStore _tripStore = TripStore.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _tripStore.ensureLoaded();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final trip = _tripStore.findById(widget.tripId);
+    if (_tripStore.isLoading && trip == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (trip == null || trip.days.isEmpty) {
+      return const Scaffold(body: Center(child: Text('找不到可導航的旅程')));
+    }
+
     final activeDay = trip.days.first;
 
     return Scaffold(
@@ -27,7 +48,10 @@ class NavigationModeScreen extends StatelessWidget {
               children: [
                 Text(
                   '前景定位示意',
-                  style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800),
                 ),
                 SizedBox(height: 10),
                 Text(
@@ -41,10 +65,12 @@ class NavigationModeScreen extends StatelessWidget {
           for (final stop in activeDay.stops) ...[
             Card(
               child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 leading: CircleAvatar(
                   backgroundColor: AppColors.accent.withValues(alpha: 0.1),
-                  child: const Icon(Icons.place_outlined, color: AppColors.accentStrong),
+                  child: const Icon(Icons.place_outlined,
+                      color: AppColors.accentStrong),
                 ),
                 title: Text(stop.title),
                 subtitle: Text('${stop.timeLabel ?? '未排定'} · 預設 500m 提醒'),
