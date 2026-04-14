@@ -255,9 +255,75 @@ Deleting one trip must remove:
 
 ## 5. Next Steps
 
-1. 接上 Supabase Auth 與 session persistence
-2. 將示範資料替換為 repository + remote/local data source
+1. 將示範資料替換為 repository + remote/local data source
+2. 完成邀請碼 join flow 與 shared_access 串接
 3. 完成 owner 編輯流程、分享管理與刪除旅程流程
-4. 完成 guest 退出分享旅程流程
-5. 完成本地通知排程與導航模式
-6. 加入 delete flow 的 widget/integration tests
+
+## 6. Supabase Integration Record
+
+### Implemented in App
+
+- Flutter app 啟動時會先讀取 `app/.env`，再初始化 Supabase
+- Auth 畫面已改為 Email/Password 註冊與登入
+- Router 已加入 auth redirect
+	- 未登入時導向 `/auth`
+	- 已登入時進入 `/trips`
+- Trips list 已加入登出入口
+
+### Secrets Handling
+
+- 真實 Supabase credentials 不可寫入 git 追蹤檔案
+- 本專案使用 `app/.env` 保存本機開發用 secret
+- `app/.env` 已加入 ignore，不會 commit
+- 版控內僅保留 `app/.env.example` 作為欄位範本
+
+### Required Environment Variables
+
+在 `app/.env` 內提供以下欄位：
+
+```env
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+```
+
+說明：
+
+- `SUPABASE_URL`: Supabase project URL
+- `SUPABASE_ANON_KEY`: 前端使用的 anon/public key
+
+### Related Files
+
+- `app/.env` 本機 secret 檔案，不進版控
+- `app/.env.example` secret 範本
+- `app/lib/main.dart` 啟動時載入 dotenv 與 Supabase initialize
+- `app/lib/core/supabase/supabase_config.dart` Supabase 設定讀取與初始化
+- `app/lib/features/auth/data/auth_service.dart` Supabase auth 封裝
+- `app/lib/features/auth/data/auth_provider.dart` auth state provider
+- `app/lib/features/auth/presentation/auth_screen.dart` Email/Password auth UI
+- `app/lib/core/router/app_router.dart` auth redirect
+
+### Required Supabase SQL
+
+第一次建置專案時，需依序在 Supabase SQL Editor 執行：
+
+1. `supabase/migrations/001_initial_schema.sql`
+2. `supabase/migrations/002_child_table_rls.sql`
+
+用途：
+
+- `001_initial_schema.sql` 建立 trips、days、stops、parking_spots、shared_access 與基礎 RLS
+- `002_child_table_rls.sql` 補上 days、stops、parking_spots 的 RLS，以及 owner 對 shared_access 的管理權限
+
+### Dashboard Requirements
+
+- Authentication -> Providers -> Email 必須啟用
+- 開發測試期間可先關閉 Confirm email，避免 sign up 後還需 email 驗證才能登入
+
+### Verification Checklist
+
+1. `flutter pub get` 成功
+2. `flutter analyze` 成功
+3. App 啟動不出現缺少 env 的錯誤
+4. 可用 Email/Password 建立帳號
+5. 登入後可自動導向 `/trips`
+6. 登出後可自動回到 `/auth`

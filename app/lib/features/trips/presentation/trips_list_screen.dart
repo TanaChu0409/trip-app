@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:trip_planner_app/core/theme/app_theme.dart';
+import 'package:trip_planner_app/features/auth/data/auth_service.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 import 'package:trip_planner_app/features/trips/data/trip_store.dart';
 import 'package:trip_planner_app/features/trips/presentation/widgets/trip_card.dart';
 
-class TripsListScreen extends StatefulWidget {
+class TripsListScreen extends ConsumerStatefulWidget {
   const TripsListScreen({super.key});
 
   @override
-  State<TripsListScreen> createState() => _TripsListScreenState();
+  ConsumerState<TripsListScreen> createState() => _TripsListScreenState();
 }
 
-class _TripsListScreenState extends State<TripsListScreen> {
+class _TripsListScreenState extends ConsumerState<TripsListScreen> {
   final TripStore _tripStore = TripStore.instance;
 
   @override
@@ -59,7 +61,21 @@ class _TripsListScreenState extends State<TripsListScreen> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 96),
             children: [
-              Text('桃園嘉義行動導覽', style: Theme.of(context).textTheme.headlineLarge),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '桃園嘉義行動導覽',
+                      style: Theme.of(context).textTheme.headlineLarge,
+                    ),
+                  ),
+                  IconButton.outlined(
+                    tooltip: '登出',
+                    onPressed: () => _signOut(context),
+                    icon: const Icon(Icons.logout_rounded),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
               const Text('第一版先把旅程列表、唯讀分享、時間軸明細與導航模式框架建起來。'),
               const SizedBox(height: 24),
@@ -122,6 +138,25 @@ class _TripsListScreenState extends State<TripsListScreen> {
         await _confirmDeleteTrip(context, trip);
       case TripCardAction.leaveTrip:
         await _confirmLeaveTrip(context, trip);
+    }
+  }
+
+  Future<void> _signOut(BuildContext context) async {
+    try {
+      await ref.read(authServiceProvider).signOut();
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已登出')));
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('登出失敗，請稍後再試')),
+      );
     }
   }
 
