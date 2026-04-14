@@ -72,7 +72,10 @@ class _TripsListScreenState extends State<TripsListScreen> {
                       message: _tripStore.statusMessage,
                     ),
                     const SizedBox(height: 24),
-                    _HeroPanel(ownedTrips: ownedTrips),
+                    _HeroPanel(
+                      ownedTrips: ownedTrips,
+                      isRemoteActive: _tripStore.isRemoteActive,
+                    ),
                     const SizedBox(height: 24),
                     _SectionHeader(
                       title: '我的旅程',
@@ -293,9 +296,13 @@ class _StatusBanner extends StatelessWidget {
 }
 
 class _HeroPanel extends StatelessWidget {
-  const _HeroPanel({required this.ownedTrips});
+  const _HeroPanel({
+    required this.ownedTrips,
+    required this.isRemoteActive,
+  });
 
   final List<TripSummary> ownedTrips;
+  final bool isRemoteActive;
 
   @override
   Widget build(BuildContext context) {
@@ -344,7 +351,7 @@ class _HeroPanel extends StatelessWidget {
             children: [
               _SummaryCard(value: '${ownedTrips.length}', label: '我的旅程'),
               _SummaryCard(value: '$totalStops', label: '已整理停靠點'),
-              const _SummaryCard(value: 'Supabase', label: '同步平台'),
+              _SummaryCard(value: isRemoteActive ? 'Supabase' : '示範資料', label: '同步平台'),
             ],
           ),
         ],
