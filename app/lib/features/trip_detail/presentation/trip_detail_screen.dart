@@ -16,7 +16,7 @@ class TripDetailScreen extends StatefulWidget {
 }
 
 class _TripDetailScreenState extends State<TripDetailScreen>
-    with SingleTickerProviderStateMixin {
+  with TickerProviderStateMixin {
   static const double _tabBarHeaderHeight = 56;
 
   late TabController _tabController;
@@ -28,36 +28,32 @@ class _TripDetailScreenState extends State<TripDetailScreen>
     super.initState();
     _tabController = TabController(length: 1, vsync: this);
     _tabController.addListener(_handleTabChanged);
-    _tripStore.addListener(_handleStoreChanged);
     _tripStore.ensureLoaded();
   }
 
   @override
   void dispose() {
-    _tripStore.removeListener(_handleStoreChanged);
     _tabController.removeListener(_handleTabChanged);
     _tabController.dispose();
     super.dispose();
   }
 
-  void _handleStoreChanged() {
-    final trip = _tripStore.findById(widget.tripId);
-    final nextLength = trip == null || trip.days.isEmpty ? 1 : trip.days.length;
-    if (_tabController.length != nextLength) {
-      final nextIndex = _tabController.index.clamp(0, nextLength - 1);
-      _tabController.removeListener(_handleTabChanged);
-      _tabController.dispose();
-      _tabController = TabController(
-        length: nextLength,
-        vsync: this,
-        initialIndex: nextIndex,
-      );
-      _tabController.addListener(_handleTabChanged);
+  void _syncTabController(int nextLength) {
+    if (_tabController.length == nextLength) {
+      return;
     }
 
-    if (mounted) {
-      setState(() {});
-    }
+    final previousController = _tabController;
+    final nextIndex = previousController.index.clamp(0, nextLength - 1);
+    previousController.removeListener(_handleTabChanged);
+    _tabController = TabController(
+      length: nextLength,
+      vsync: this,
+      initialIndex: nextIndex,
+    );
+    _tabController.addListener(_handleTabChanged);
+    previousController.dispose();
+    _hideFloatingActionButton = false;
   }
 
   void _handleTabChanged() {
@@ -94,6 +90,8 @@ class _TripDetailScreenState extends State<TripDetailScreen>
         if (trip == null) {
           return const Scaffold(body: Center(child: Text('找不到旅程')));
         }
+
+        _syncTabController(trip.days.isEmpty ? 1 : trip.days.length);
 
         final isReadOnly = trip.role == TripRole.guest;
 
