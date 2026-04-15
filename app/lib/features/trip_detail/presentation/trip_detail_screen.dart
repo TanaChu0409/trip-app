@@ -92,6 +92,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
         final isReadOnly = trip.role == TripRole.guest;
 
         return Scaffold(
+          resizeToAvoidBottomInset: false,
           floatingActionButton: isReadOnly ||
                   trip.days.isEmpty ||
                   _hideFloatingActionButton
