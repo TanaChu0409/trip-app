@@ -1,2 +1,15 @@
 .DS_Store
 Thumbs.db
+.env
+app/.dart_tool/
+app/.packages
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.pub/
+app/build/
+app/.idea/
+app/.metadata
+client_secret_*.json
+*.xlsx
+停車場.md
+行程.md
