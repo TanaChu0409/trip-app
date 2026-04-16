@@ -304,11 +304,13 @@ class TripStore extends ChangeNotifier {
     required String title,
     required DateTime startDate,
     required DateTime endDate,
+    String? color,
   }) async {
     final trip = await _tripService.createTrip(
       title: title,
       startDate: startDate,
       endDate: endDate,
+      color: color,
     );
 
     _trips.insert(0, trip);

@@ -18,7 +18,12 @@ class TripCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tripColor = colorFromHex(trip.color);
+    final tripColorSoft = tintColor(tripColor, amount: 0.9);
+    final tripColorStrong = shadeColor(tripColor, amount: 0.18);
+
     return Card(
+      color: tintColor(tripColor, amount: 0.95),
       child: InkWell(
         borderRadius: BorderRadius.circular(24),
         onTap: onTap,
@@ -28,16 +33,35 @@ class TripCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Container(
+                    width: 12,
+                    height: 12,
+                    margin: const EdgeInsets.only(top: 6),
+                    decoration: BoxDecoration(
+                      color: tripColor,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: tripColor.withValues(alpha: 0.28),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       trip.title,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w800,
-                            color: AppColors.text,
+                            color: tripColorStrong,
                           ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   if (trip.role == TripRole.guest)
                     const Chip(label: Text('唯讀'))
                   else
@@ -61,15 +85,30 @@ class TripCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 10),
-              Text(trip.dateRange),
+              Text(
+                trip.dateRange,
+                style: const TextStyle(color: AppColors.muted),
+              ),
               const SizedBox(height: 14),
               Wrap(
                 spacing: 10,
                 runSpacing: 10,
                 children: [
-                  _MetaPill(label: '${trip.days.length} 天'),
-                  _MetaPill(label: '${trip.stopCount} 個停靠點'),
-                  _MetaPill(label: trip.role == TripRole.owner ? '我的旅程' : '分享給我的'),
+                  _MetaPill(
+                    label: '${trip.days.length} 天',
+                    backgroundColor: tripColorSoft,
+                    textColor: tripColorStrong,
+                  ),
+                  _MetaPill(
+                    label: '${trip.stopCount} 個停靠點',
+                    backgroundColor: tripColorSoft,
+                    textColor: tripColorStrong,
+                  ),
+                  _MetaPill(
+                    label: trip.role == TripRole.owner ? '我的旅程' : '分享給我的',
+                    backgroundColor: tripColorSoft,
+                    textColor: tripColorStrong,
+                  ),
                 ],
               ),
             ],
@@ -81,22 +120,28 @@ class TripCard extends StatelessWidget {
 }
 
 class _MetaPill extends StatelessWidget {
-  const _MetaPill({required this.label});
+  const _MetaPill({
+    required this.label,
+    required this.backgroundColor,
+    required this.textColor,
+  });
 
   final String label;
+  final Color backgroundColor;
+  final Color textColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.accent.withValues(alpha: 0.08),
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: AppColors.accentStrong,
+        style: TextStyle(
+          color: textColor,
           fontWeight: FontWeight.w700,
         ),
       ),
