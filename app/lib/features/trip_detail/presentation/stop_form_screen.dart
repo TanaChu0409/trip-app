@@ -5,6 +5,7 @@ import 'package:trip_planner_app/core/theme/app_theme.dart';
 import 'package:trip_planner_app/core/ui/app_scaffold_messenger.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 import 'package:trip_planner_app/features/trips/data/trip_store.dart';
+import 'package:trip_planner_app/features/trips/presentation/widgets/trip_color_picker.dart';
 
 class StopFormScreen extends StatefulWidget {
   const StopFormScreen({
@@ -32,6 +33,7 @@ class _StopFormScreenState extends State<StopFormScreen> {
   final List<_ParkingSpotDraft> _parkingSpots = [];
   final TripStore _tripStore = TripStore.instance;
 
+  String? _selectedColor;
   bool _isHighlight = false;
   bool _isSaving = false;
   bool _initialized = false;
@@ -203,6 +205,16 @@ class _StopFormScreenState extends State<StopFormScreen> {
                           ? null
                           : (value) => setState(() => _isHighlight = value),
                     ),
+                    const SizedBox(height: 14),
+                    TripColorPicker(
+                      label: '地點顏色',
+                      description: '可為這個地點設定獨立顏色；未設定時沿用旅程顏色。',
+                      selectedColor: _selectedColor,
+                      showDefaultOption: true,
+                      defaultLabel: '沿用旅程顏色',
+                      onColorChanged: (value) =>
+                          setState(() => _selectedColor = value),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -271,6 +283,7 @@ class _StopFormScreenState extends State<StopFormScreen> {
       _noteController.text = stop.note ?? '';
       _badgeController.text = stop.badge ?? '';
       _mapUrlController.text = stop.mapUrl ?? '';
+      _selectedColor = stop.color;
       _isHighlight = stop.isHighlight;
       for (final parkingSpot in stop.parkingSpots) {
         _parkingSpots.add(_ParkingSpotDraft.fromParkingSpot(parkingSpot));
@@ -359,6 +372,7 @@ class _StopFormScreenState extends State<StopFormScreen> {
         note: _cleanOptional(_noteController.text),
         badge: _cleanOptional(_badgeController.text),
         mapUrl: _cleanOptional(_mapUrlController.text),
+        color: _selectedColor,
         isHighlight: _isHighlight,
         parkingSpots: [
           for (var index = 0; index < _parkingSpots.length; index += 1)

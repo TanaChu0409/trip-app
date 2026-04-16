@@ -7,18 +7,29 @@ class StopCard extends StatelessWidget {
   const StopCard({
     super.key,
     required this.stop,
+    required this.tripColor,
     required this.isReadOnly,
     this.onTap,
     this.trailing,
   });
 
   final StopItem stop;
+  final String? tripColor;
   final bool isReadOnly;
   final VoidCallback? onTap;
   final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
+    final accentColor = colorFromHex(stop.color ?? tripColor);
+    final accentSoft = tintColor(
+      accentColor,
+      amount: stop.color == null ? 0.94 : 0.9,
+    );
+    final accentStrong = shadeColor(accentColor, amount: 0.18);
+    final cardColor =
+        stop.isHighlight ? tintColor(accentColor, amount: 0.82) : accentSoft;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -28,18 +39,16 @@ class StopCard extends StatelessWidget {
             padding: const EdgeInsets.only(top: 8),
             child: Text(
               stop.timeLabel ?? '未排定',
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w800,
-                color: AppColors.accentStrong,
+                color: accentStrong,
               ),
             ),
           ),
         ),
         Expanded(
           child: Card(
-            color: stop.isHighlight
-                ? const Color(0xFFE8F2FB)
-                : AppColors.surface.withValues(alpha: 0.92),
+            color: cardColor,
             child: InkWell(
               borderRadius: BorderRadius.circular(24),
               onTap: onTap,
@@ -51,15 +60,43 @@ class StopCard extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          margin: const EdgeInsets.only(top: 6),
+                          decoration: BoxDecoration(
+                            color: accentColor,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: accentColor.withValues(alpha: 0.24),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             stop.title,
-                            style: Theme.of(context).textTheme.titleMedium,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(color: accentStrong),
                           ),
                         ),
                         if (stop.badge != null) ...[
                           const SizedBox(width: 8),
-                          Chip(label: Text(stop.badge!)),
+                          Chip(
+                            backgroundColor:
+                                tintColor(accentColor, amount: 0.86),
+                            labelStyle: TextStyle(
+                              color: accentStrong,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            label: Text(stop.badge!),
+                          ),
                         ],
                         if (trailing != null) ...[
                           const SizedBox(width: 8),
@@ -83,7 +120,10 @@ class StopCard extends StatelessWidget {
                       const SizedBox(height: 14),
                       const Text(
                         '附近停車場',
-                        style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.text),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.text,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       for (final parking in stop.parkingSpots) ...[
@@ -93,11 +133,20 @@ class StopCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.accent.withValues(alpha: 0.08)),
+                            border: Border.all(
+                              color: accentColor.withValues(alpha: 0.12),
+                            ),
                           ),
                           child: Row(
                             children: [
-                              Expanded(child: Text(parking.name, style: const TextStyle(color: AppColors.text))),
+                              Expanded(
+                                child: Text(
+                                  parking.name,
+                                  style: const TextStyle(
+                                    color: AppColors.text,
+                                  ),
+                                ),
+                              ),
                               TextButton(
                                 onPressed: () => _openMap(parking.mapUrl),
                                 child: const Text('導航'),
@@ -109,7 +158,9 @@ class StopCard extends StatelessWidget {
                     ],
                     const SizedBox(height: 8),
                     Text(
-                      isReadOnly ? '唯讀模式仍可接收通知與使用導航模式。' : '點擊可編輯，長按拖曳可調整順序。',
+                      isReadOnly
+                          ? '唯讀模式仍可接收通知與使用導航模式。'
+                          : '點擊可編輯，長按拖曳可調整順序。',
                     ),
                   ],
                 ),

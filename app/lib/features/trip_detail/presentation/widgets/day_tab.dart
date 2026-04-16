@@ -9,6 +9,7 @@ class DayTab extends StatefulWidget {
     super.key,
     required this.tripId,
     required this.day,
+    required this.tripColor,
     required this.isReadOnly,
     required this.isActive,
     required this.onAddButtonVisibilityChanged,
@@ -16,6 +17,7 @@ class DayTab extends StatefulWidget {
 
   final String tripId;
   final TripDay day;
+  final String? tripColor;
   final bool isReadOnly;
   final bool isActive;
   final ValueChanged<bool> onAddButtonVisibilityChanged;
@@ -152,6 +154,7 @@ class _DayTabState extends State<DayTab> {
   Widget _buildStopItem(BuildContext context, StopItem stop, int index) {
     final card = StopCard(
       stop: stop,
+      tripColor: widget.tripColor,
       isReadOnly: widget.isReadOnly,
       onTap: widget.isReadOnly || stop.id == null
           ? null

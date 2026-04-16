@@ -55,6 +55,7 @@ class StopItem {
     this.note,
     this.badge,
     this.mapUrl,
+    this.color,
     this.isHighlight = false,
     this.parkingSpots = const [],
     this.sortOrder = 0,
@@ -67,6 +68,7 @@ class StopItem {
   final String? note;
   final String? badge;
   final String? mapUrl;
+  final String? color;
   final bool isHighlight;
   final List<ParkingSpot> parkingSpots;
   final int sortOrder;
@@ -78,6 +80,7 @@ class StopItem {
     String? note,
     String? badge,
     String? mapUrl,
+    String? color,
     bool? isHighlight,
     List<ParkingSpot>? parkingSpots,
     int? sortOrder,
@@ -89,6 +92,7 @@ class StopItem {
       note: note ?? this.note,
       badge: badge ?? this.badge,
       mapUrl: mapUrl ?? this.mapUrl,
+      color: color ?? this.color,
       isHighlight: isHighlight ?? this.isHighlight,
       parkingSpots: parkingSpots ?? this.parkingSpots,
       sortOrder: sortOrder ?? this.sortOrder,
@@ -103,6 +107,7 @@ class StopItem {
       'note': note,
       'badge': badge,
       'map_url': mapUrl,
+      'color': color,
       'is_highlight': isHighlight,
       'sort_order': sortOrder,
     };
@@ -119,6 +124,7 @@ class StopItem {
       note: json['note'] as String?,
       badge: json['badge'] as String?,
       mapUrl: json['map_url'] as String?,
+      color: json['color'] as String?,
       isHighlight: json['is_highlight'] as bool? ?? false,
       parkingSpots: parkingSpots,
       sortOrder: json['sort_order'] as int? ?? 0,
@@ -167,6 +173,7 @@ class TripSummary {
     required this.days,
     this.shareCode,
     this.sharedFromTripId,
+    this.color,
   });
 
   final String id;
@@ -176,6 +183,7 @@ class TripSummary {
   final List<TripDay> days;
   final String? shareCode;
   final String? sharedFromTripId;
+  final String? color;
 
   TripSummary copyWith({
     String? id,
@@ -185,6 +193,7 @@ class TripSummary {
     List<TripDay>? days,
     String? shareCode,
     String? sharedFromTripId,
+    String? color,
   }) {
     return TripSummary(
       id: id ?? this.id,
@@ -194,6 +203,7 @@ class TripSummary {
       days: days ?? this.days,
       shareCode: shareCode ?? this.shareCode,
       sharedFromTripId: sharedFromTripId ?? this.sharedFromTripId,
+      color: color ?? this.color,
     );
   }
 

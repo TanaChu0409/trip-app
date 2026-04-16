@@ -16,7 +16,7 @@ class TripDetailScreen extends StatefulWidget {
 }
 
 class _TripDetailScreenState extends State<TripDetailScreen>
-  with TickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const double _tabBarHeaderHeight = 56;
 
   late TabController _tabController;
@@ -94,6 +94,8 @@ class _TripDetailScreenState extends State<TripDetailScreen>
         _syncTabController(trip.days.isEmpty ? 1 : trip.days.length);
 
         final isReadOnly = trip.role == TripRole.guest;
+        final tripColor = colorFromHex(trip.color);
+        final tripColorSoft = tintColor(tripColor, amount: 0.84);
 
         return Scaffold(
           resizeToAvoidBottomInset: false,
@@ -104,23 +106,22 @@ class _TripDetailScreenState extends State<TripDetailScreen>
               : FloatingActionButton.extended(
                   onPressed: () {
                     final currentDay = trip.days[
-                      _tabController.index.clamp(0, trip.days.length - 1)
-                    ];
+                        _tabController.index.clamp(0, trip.days.length - 1)];
                     context.push(
                       '/trips/${trip.id}/days/${currentDay.id}/stops/new',
                     );
                   },
-                  backgroundColor: AppColors.accent,
-                  foregroundColor: Colors.white,
+                  backgroundColor: tripColor,
+                  foregroundColor: onAccentColor(tripColor),
                   icon: const Icon(Icons.add_rounded),
                   label: const Text('新增地點'),
                 ),
           body: Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFFF5F9FE), Color(0xFFDDE8F3)],
+                colors: [tintColor(tripColor, amount: 0.94), tripColorSoft],
               ),
             ),
             child: SafeArea(
@@ -131,6 +132,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                       children: [
                         _TripHeader(
                           title: trip.title,
+                          tripColor: tripColor,
                           isReadOnly: isReadOnly,
                           onBackPressed: () => context.go('/trips'),
                           onActionSelected: (action) =>
@@ -138,6 +140,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                         ),
                         _TripSummaryCard(
                           trip: trip,
+                          tripColor: tripColor,
                           isReadOnly: isReadOnly,
                           onCopyShareCode: () => _copyShareCode(context, trip),
                           onOpenNavigation: () =>
@@ -152,11 +155,14 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                       delegate: _TripDayTabBarHeaderDelegate(
                         height: _tabBarHeaderHeight,
                         child: Container(
-                          color: const Color(0xFFEAF2F9),
+                          color: tintColor(tripColor, amount: 0.9),
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                           alignment: Alignment.centerLeft,
                           child: TabBar(
                             controller: _tabController,
+                            labelColor: shadeColor(tripColor, amount: 0.16),
+                            unselectedLabelColor: AppColors.muted,
+                            indicatorColor: tripColor,
                             isScrollable: true,
                             tabs: [
                               for (final day in trip.days)
@@ -178,6 +184,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                             DayTab(
                               tripId: trip.id,
                               day: trip.days[index],
+                              tripColor: trip.color,
                               isReadOnly: isReadOnly,
                               isActive: index == _tabController.index,
                               onAddButtonVisibilityChanged:
@@ -315,12 +322,14 @@ enum _TripDetailAction { deleteTrip, leaveTrip }
 class _TripHeader extends StatelessWidget {
   const _TripHeader({
     required this.title,
+    required this.tripColor,
     required this.isReadOnly,
     required this.onBackPressed,
     required this.onActionSelected,
   });
 
   final String title;
+  final Color tripColor;
   final bool isReadOnly;
   final VoidCallback onBackPressed;
   final ValueChanged<_TripDetailAction> onActionSelected;
@@ -338,10 +347,10 @@ class _TripHeader extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: shadeColor(tripColor, amount: 0.2),
+                  ),
             ),
           ),
           if (isReadOnly)
@@ -377,12 +386,14 @@ class _TripHeader extends StatelessWidget {
 class _TripSummaryCard extends StatelessWidget {
   const _TripSummaryCard({
     required this.trip,
+    required this.tripColor,
     required this.isReadOnly,
     required this.onCopyShareCode,
     required this.onOpenNavigation,
   });
 
   final TripSummary trip;
+  final Color tripColor;
   final bool isReadOnly;
   final VoidCallback onCopyShareCode;
   final VoidCallback onOpenNavigation;
@@ -396,10 +407,13 @@ class _TripSummaryCard extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(28),
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFFAFDFF), Color(0xFFE2EDF8)],
+            colors: [
+              tintColor(tripColor, amount: 0.97),
+              tintColor(tripColor, amount: 0.84),
+            ],
           ),
         ),
         child: Column(
@@ -408,13 +422,13 @@ class _TripSummaryCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: AppColors.accent.withValues(alpha: 0.08),
+                color: tintColor(tripColor, amount: 0.9),
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
                 trip.dateRange,
-                style: const TextStyle(
-                  color: AppColors.accentStrong,
+                style: TextStyle(
+                  color: shadeColor(tripColor, amount: 0.2),
                   fontWeight: FontWeight.w700,
                 ),
               ),

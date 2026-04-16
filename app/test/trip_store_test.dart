@@ -10,6 +10,7 @@ void main() {
       note: '測試備註',
       badge: '午餐',
       mapUrl: 'https://example.com',
+      color: '#F97316',
       isHighlight: true,
       sortOrder: 2,
     );
@@ -22,8 +23,25 @@ void main() {
     expect(restored.note, '測試備註');
     expect(restored.badge, '午餐');
     expect(restored.mapUrl, 'https://example.com');
+    expect(restored.color, '#F97316');
     expect(restored.isHighlight, isTrue);
     expect(restored.sortOrder, 2);
+  });
+
+  test('trip summary copyWith preserves and overrides color', () {
+    const trip = TripSummary(
+      id: 'trip-1',
+      title: '測試旅程',
+      dateRange: '2026/05/01 - 2026/05/02',
+      role: TripRole.owner,
+      days: [],
+      color: '#003D79',
+    );
+
+    final updated = trip.copyWith(color: '#F97316');
+
+    expect(updated.color, '#F97316');
+    expect(updated.title, '測試旅程');
   });
 
   test('trip summary stop count aggregates nested stops', () {

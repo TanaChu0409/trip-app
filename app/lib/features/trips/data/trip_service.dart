@@ -19,7 +19,7 @@ class TripService {
     final userId = _requireUserId();
     final ownedRows = await _client
         .from('trips')
-        .select('id, title, start_date, end_date, share_code')
+        .select('id, title, start_date, end_date, share_code, color')
         .eq('owner_id', userId)
         .eq('is_archived', false)
         .order('start_date', ascending: false);
@@ -38,7 +38,7 @@ class TripService {
         ? const <dynamic>[]
         : await _client
             .from('trips')
-            .select('id, title, start_date, end_date, share_code')
+            .select('id, title, start_date, end_date, share_code, color')
             .inFilter('id', sharedTripIds)
             .eq('is_archived', false)
             .order('start_date', ascending: false);
@@ -55,6 +55,7 @@ class TripService {
     required String title,
     required DateTime startDate,
     required DateTime endDate,
+    String? color,
   }) async {
     final userId = _requireUserId();
 
@@ -69,8 +70,9 @@ class TripService {
               'end_date': _toIsoDate(endDate),
               'owner_id': userId,
               'share_code': shareCode,
+              'color': color,
             })
-            .select('id, title, start_date, end_date, share_code')
+            .select('id, title, start_date, end_date, share_code, color')
             .single();
 
         final tripId = tripRow['id'] as String;
@@ -98,7 +100,7 @@ class TripService {
   Future<TripSummary?> fetchTripById(String tripId, {TripRole? role}) async {
     final rows = await _client
         .from('trips')
-        .select('id, title, start_date, end_date, share_code, owner_id')
+        .select('id, title, start_date, end_date, share_code, owner_id, color')
         .eq('id', tripId)
         .limit(1);
 
@@ -250,6 +252,7 @@ class TripService {
             role: role,
             days: daysByTripId[row['id'] as String] ?? const [],
             shareCode: row['share_code'] as String?,
+            color: row['color'] as String?,
           ),
         )
         .toList(growable: false);
@@ -284,7 +287,7 @@ class TripService {
     final rows = await _client
         .from('stops')
         .select(
-            'id, day_id, time, title, note, badge, map_url, is_highlight, sort_order')
+            'id, day_id, time, title, note, badge, map_url, color, is_highlight, sort_order')
         .inFilter('day_id', dayIds)
         .order('sort_order');
     final result = rows
