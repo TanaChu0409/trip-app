@@ -10,3 +10,6 @@ app/build/
 app/.idea/
 app/.metadata
 client_secret_*.json
+*.xlsx
+停車場.md
+行程.md
