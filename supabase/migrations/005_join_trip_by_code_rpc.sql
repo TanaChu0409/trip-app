@@ -9,7 +9,7 @@ declare
   current_user_id uuid := auth.uid();
   target_trip_id uuid;
   target_owner_id uuid;
-  inserted_rows integer := 0;
+  rows_affected integer := 0;
 begin
   if current_user_id is null then
     raise exception 'Authentication required: user must be authenticated to join a trip.'
@@ -38,9 +38,9 @@ begin
   values (target_trip_id, current_user_id)
   on conflict (trip_id, user_id) do nothing;
 
-  get diagnostics inserted_rows = row_count;
+  get diagnostics rows_affected = row_count;
 
-  if inserted_rows > 0 then
+  if rows_affected > 0 then
     return jsonb_build_object(
       'status', 'success',
       'trip_id', target_trip_id

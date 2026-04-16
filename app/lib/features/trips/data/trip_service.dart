@@ -121,7 +121,7 @@ class TripService {
     );
     if (response is! Map) {
       throw StateError(
-        'Expected Map response from join_trip_by_code RPC, but received: $response',
+        'Expected Map response from join_trip_by_code RPC, but received ${response.runtimeType}: $response',
       );
     }
     final payload = Map<String, dynamic>.from(response);
@@ -136,7 +136,13 @@ class TripService {
       return JoinTripByCodeResult(status: status);
     }
 
-    final tripId = payload['trip_id'] as String?;
+    final rawTripId = payload['trip_id'];
+    if (rawTripId != null && rawTripId is! String) {
+      throw StateError(
+        'Expected string trip_id from join_trip_by_code RPC, but received: $rawTripId',
+      );
+    }
+    final tripId = rawTripId as String?;
     if (tripId == null || tripId.isEmpty) {
       throw StateError(
         'Server error: join_trip_by_code returned success status without the required trip_id field.',
