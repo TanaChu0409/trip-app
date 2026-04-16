@@ -36,6 +36,14 @@ jobs:
         working-directory: app
         run: flutter pub get
 
+      - name: Validate Supabase secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          test -n "$SUPABASE_URL" || { echo "::error::Missing GitHub secret SUPABASE_URL"; exit 1; }
+          test -n "$SUPABASE_ANON_KEY" || { echo "::error::Missing GitHub secret SUPABASE_ANON_KEY"; exit 1; }
+
       - name: Build web app
         working-directory: app
         run: >-

@@ -7,7 +7,7 @@ class SupabaseErrorFormatter {
     if (error is StateError) {
       final message = error.message.toString();
       if (message.contains('Missing required environment variable')) {
-        return '缺少 Supabase 設定。請檢查 app/.env 內的 SUPABASE_URL 與 SUPABASE_ANON_KEY。';
+        return '缺少 Supabase 設定。請用 --dart-define 或 --dart-define-from-file 提供 SUPABASE_URL 與 SUPABASE_ANON_KEY。';
       }
     }
 

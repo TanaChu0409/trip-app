@@ -1,4 +1,3 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AppSupabaseConfig {
@@ -25,11 +24,6 @@ class AppSupabaseConfig {
       return compileTimeValue;
     }
 
-    final value = dotenv.env[key]?.trim();
-    if (value == null || value.isEmpty) {
-      throw StateError('Missing required environment variable: $key');
-    }
-
-    return value;
+    throw StateError('Missing required environment variable: $key');
   }
 }

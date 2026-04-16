@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:trip_planner_app/app.dart';
 import 'package:trip_planner_app/core/supabase/supabase_config.dart';
@@ -10,12 +9,6 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    try {
-      await dotenv.load();
-    } on Exception {
-      // GitHub Pages builds inject Supabase config through --dart-define.
-    }
-
     await AppSupabaseConfig.initialize();
     runApp(const ProviderScope(child: TripPlannerApp()));
   } catch (error, stackTrace) {
@@ -70,7 +63,7 @@ class _StartupFailureApp extends StatelessWidget {
                         const Text('建議檢查：'),
                         const SizedBox(height: 8),
                         const Text(
-                            '1. app/.env 是否存在，或 build 時是否透過 --dart-define 提供 SUPABASE_URL、SUPABASE_ANON_KEY'),
+                          '1. 啟動或 build 時是否透過 --dart-define 或 --dart-define-from-file 提供 SUPABASE_URL、SUPABASE_ANON_KEY'),
                         const Text('2. Supabase SQL migrations 是否已完整執行'),
                         const Text('3. 本機網路是否能連到 Supabase 專案'),
                         const SizedBox(height: 16),

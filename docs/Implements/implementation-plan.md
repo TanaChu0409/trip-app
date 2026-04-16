@@ -175,17 +175,25 @@ shared_access
 ### Secrets Handling
 
 - 真實 Supabase credentials 不可寫入 git 追蹤檔案
-- 本專案使用 `app/.env` 保存本機開發用 secret
-- `app/.env` 已加入 ignore，不會 commit
+- 本專案只接受編譯期注入的 secrets，不在 runtime 讀取 Flutter asset
+- 可用 `--dart-define` 或 `--dart-define-from-file=app/.env` 提供設定
+- `app/.env` 可作為本機 `--dart-define-from-file` 的輸入檔，且已加入 ignore，不會 commit
 - 版控內保留 `app/.env.example` 作為欄位範本
 
 ### Required Environment Variables
 
-在 `app/.env` 內提供以下欄位：
+提供以下欄位：
 
 ```env
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
+```
+
+範例：
+
+```bash
+flutter run --dart-define-from-file=app/.env
+flutter build web --dart-define-from-file=app/.env
 ```
 
 說明：
@@ -195,10 +203,10 @@ SUPABASE_ANON_KEY=
 
 ### Related Files
 
-- `app/.env` 本機 secret 檔案，不進版控
+- `app/.env` 本機 `--dart-define-from-file` 輸入檔，不進版控
 - `app/.env.example` secret 範本
-- `app/lib/main.dart` 啟動時載入 dotenv 與 Supabase initialize
-- `app/lib/core/supabase/supabase_config.dart` Supabase 設定讀取與初始化
+- `app/lib/main.dart` 啟動與 Supabase initialize
+- `app/lib/core/supabase/supabase_config.dart` 從 compile-time define 讀取 Supabase 設定並初始化
 - `app/lib/core/router/app_router.dart` auth redirect 與 app routes
 - `app/lib/features/auth/data/auth_service.dart` Supabase auth 封裝
 - `app/lib/features/auth/data/auth_provider.dart` auth state provider
