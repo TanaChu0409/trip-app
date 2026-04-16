@@ -120,10 +120,18 @@ class TripService {
       params: {'p_share_code': normalizedCode},
     );
     if (response is! Map) {
-      throw StateError('Unexpected join_trip_by_code response: $response');
+      throw StateError(
+        'Expected Map response from join_trip_by_code RPC, but received: $response',
+      );
     }
     final payload = Map<String, dynamic>.from(response);
-    final status = joinTripByCodeStatusFromBackend(payload['status'] as String?);
+    final rawStatus = payload['status'];
+    if (rawStatus != null && rawStatus is! String) {
+      throw StateError(
+        'Expected string status from join_trip_by_code RPC, but received: $rawStatus',
+      );
+    }
+    final status = joinTripByCodeStatusFromBackend(rawStatus as String?);
     if (status != JoinTripByCodeStatus.success) {
       return JoinTripByCodeResult(status: status);
     }
