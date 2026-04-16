@@ -113,6 +113,7 @@ class TripService {
   }
 
   Future<JoinTripByCodeResult> joinTripByCode(String rawCode) async {
+    _requireUserId();
     final normalizedCode = rawCode.trim().toUpperCase();
     final response = await _client.rpc(
       'join_trip_by_code',
@@ -129,9 +130,7 @@ class TripService {
 
     final tripId = payload['trip_id'] as String?;
     if (tripId == null || tripId.isEmpty) {
-      return const JoinTripByCodeResult(
-        status: JoinTripByCodeStatus.tripNotFound,
-      );
+      throw StateError('join_trip_by_code returned success without trip_id.');
     }
     final trip = await fetchTripById(tripId, role: TripRole.guest);
     if (trip == null) {

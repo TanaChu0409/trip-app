@@ -30,10 +30,7 @@ begin
   end if;
 
   if target_owner_id = current_user_id then
-    return jsonb_build_object(
-      'status', 'already_joined',
-      'trip_id', target_trip_id
-    );
+    return jsonb_build_object('status', 'already_joined');
   end if;
 
   insert into public.shared_access (trip_id, user_id)
@@ -49,9 +46,6 @@ begin
     );
   end if;
 
-  return jsonb_build_object(
-    'status', 'already_joined',
-    'trip_id', target_trip_id
-  );
+  return jsonb_build_object('status', 'already_joined');
 end;
 $$;
