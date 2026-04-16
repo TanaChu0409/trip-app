@@ -113,7 +113,9 @@ class TripService {
   }
 
   Future<JoinTripByCodeResult> joinTripByCode(String rawCode) async {
-    _requireUserId();
+    if (_client.auth.currentUser?.id == null) {
+      throw StateError('User must be signed in.');
+    }
     final normalizedCode = rawCode.trim().toUpperCase();
     final response = await _client.rpc(
       'join_trip_by_code',

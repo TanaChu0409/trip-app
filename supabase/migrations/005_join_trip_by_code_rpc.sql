@@ -5,7 +5,7 @@ security definer
 set search_path = public
 as $$
 declare
-  normalized_code text := trim(upper(p_share_code));
+  normalized_code text := trim(upper(coalesce(p_share_code, '')));
   current_user_id uuid := auth.uid();
   target_trip_id uuid;
   target_owner_id uuid;
