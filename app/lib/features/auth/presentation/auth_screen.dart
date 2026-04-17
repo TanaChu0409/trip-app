@@ -1,6 +1,3 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:trip_planner_app/core/supabase/supabase_error_formatter.dart';
@@ -15,10 +12,9 @@ class AuthScreen extends ConsumerStatefulWidget {
 
 class _AuthScreenState extends ConsumerState<AuthScreen> {
   bool _isGoogleLoading = false;
-  bool _isAppleLoading = false;
   String? _errorMessage;
 
-  bool get _anyLoading => _isGoogleLoading || _isAppleLoading;
+  bool get _anyLoading => _isGoogleLoading;
 
   Future<void> _signInWithGoogle() async {
     setState(() {
@@ -34,23 +30,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       });
     } finally {
       if (mounted) setState(() => _isGoogleLoading = false);
-    }
-  }
-
-  Future<void> _signInWithApple() async {
-    setState(() {
-      _isAppleLoading = true;
-      _errorMessage = null;
-    });
-    try {
-      await ref.read(authServiceProvider).signInWithApple();
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = SupabaseErrorFormatter.userMessage(error);
-      });
-    } finally {
-      if (mounted) setState(() => _isAppleLoading = false);
     }
   }
 
@@ -82,7 +61,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       children: [
                         Text('旅遊規劃APP', style: theme.textTheme.headlineLarge),
                         const SizedBox(height: 12),
-                        const Text('請使用 Google 或 Apple 帳號登入。'),
+                        const Text('請使用 Google 帳號登入。'),
                         if (_errorMessage != null) ...[
                           const SizedBox(height: 14),
                           Text(
@@ -110,24 +89,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                   size: 22),
                           label: const Text('以 Google 帳號登入'),
                         ),
-                        if (kIsWeb || !Platform.isAndroid) ...[
-                          const SizedBox(height: 8),
-                          OutlinedButton.icon(
-                            onPressed: _anyLoading ? null : _signInWithApple,
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(48),
-                            ),
-                            icon: _isAppleLoading
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2),
-                                  )
-                                : const Icon(Icons.apple_rounded, size: 22),
-                            label: const Text('以 Apple 帳號登入'),
-                          ),
-                        ],
+
                       ],
                     ),
                   ),

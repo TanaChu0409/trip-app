@@ -368,6 +368,19 @@ class TripStore extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> updateTripColor(String tripId, String? color) async {
+    final index = _trips
+        .indexWhere((trip) => trip.id == tripId && trip.role == TripRole.owner);
+    if (index == -1) {
+      return false;
+    }
+
+    await _tripService.updateTripColor(tripId, color);
+    _trips[index] = _trips[index].copyWith(color: color);
+    notifyListeners();
+    return true;
+  }
+
   void resetForTests() {
     _trips.clear();
     NotificationService.instance.resetForTests();

@@ -15,10 +15,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('旅遊規劃APP'), findsOneWidget);
-    expect(
-      find.text('所有旅程、天數、停靠點與分享關係都會直接以 Supabase 作為唯一資料來源。'),
-      findsOneWidget,
-    );
     expect(find.text('新增旅程'), findsOneWidget);
   });
 }

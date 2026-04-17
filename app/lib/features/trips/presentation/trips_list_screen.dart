@@ -85,8 +85,6 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              const Text('所有旅程、天數、停靠點與分享關係都會直接以 Supabase 作為唯一資料來源。'),
               const SizedBox(height: 24),
               _HeroPanel(ownedTrips: ownedTrips),
               const SizedBox(height: 24),
@@ -504,21 +502,6 @@ class _HeroPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: const Text(
-              'Supabase 唯一資料源',
-              style: TextStyle(
-                color: AppColors.accentStrong,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
           Text('旅程總覽', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 14),
           Wrap(
@@ -527,7 +510,6 @@ class _HeroPanel extends StatelessWidget {
             children: [
               _SummaryCard(value: '${ownedTrips.length}', label: '我的旅程'),
               _SummaryCard(value: '$totalStops', label: '已整理停靠點'),
-              const _SummaryCard(value: 'Supabase', label: '資料層'),
             ],
           ),
         ],

@@ -184,6 +184,15 @@ class TripService {
     return rows.isNotEmpty;
   }
 
+  Future<void> updateTripColor(String tripId, String? color) async {
+    final userId = _requireUserId();
+    await _client
+        .from('trips')
+        .update({'color': color})
+        .eq('id', tripId)
+        .eq('owner_id', userId);
+  }
+
   Future<List<TripSummary>> _assembleTrips({
     required List<dynamic> rows,
     required TripRole role,

@@ -5,6 +5,7 @@ import 'package:trip_planner_app/core/theme/app_theme.dart';
 import 'package:trip_planner_app/features/trip_detail/presentation/widgets/day_tab.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 import 'package:trip_planner_app/features/trips/data/trip_store.dart';
+import 'package:trip_planner_app/features/trips/presentation/widgets/trip_color_picker.dart';
 
 class TripDetailScreen extends StatefulWidget {
   const TripDetailScreen({super.key, required this.tripId});
@@ -212,7 +213,80 @@ class _TripDetailScreenState extends State<TripDetailScreen>
       case _TripDetailAction.leaveTrip:
         await _leaveTrip(context, trip);
         return;
+      case _TripDetailAction.changeColor:
+        await _changeTripColor(context, trip);
+        return;
     }
+  }
+
+  Future<void> _changeTripColor(BuildContext context, TripSummary trip) async {
+    String? selectedColor = trip.color;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                24,
+                24,
+                24,
+                MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '更改旅程顏色',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 20),
+                  TripColorPicker(
+                    selectedColor: selectedColor,
+                    onColorChanged: (value) =>
+                        setSheetState(() => selectedColor = value),
+                    description: '選擇後立即套用至整個旅程。',
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('確認'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!context.mounted) {
+      return;
+    }
+
+    if (selectedColor == trip.color) {
+      return;
+    }
+
+    final updated = await _tripStore.updateTripColor(trip.id, selectedColor);
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(updated ? '已更新旅程顏色' : '更新顏色失敗'),
+      ),
+    );
   }
 
   Future<void> _deleteTrip(BuildContext context, TripSummary trip) async {
@@ -317,7 +391,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   }
 }
 
-enum _TripDetailAction { deleteTrip, leaveTrip }
+enum _TripDetailAction { deleteTrip, leaveTrip, changeColor }
 
 class _TripHeader extends StatelessWidget {
   const _TripHeader({
@@ -370,6 +444,10 @@ class _TripHeader extends StatelessWidget {
               tooltip: '旅程操作',
               onSelected: onActionSelected,
               itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: _TripDetailAction.changeColor,
+                  child: Text('更改顏色'),
+                ),
                 PopupMenuItem(
                   value: _TripDetailAction.deleteTrip,
                   child: Text('刪除旅程'),
