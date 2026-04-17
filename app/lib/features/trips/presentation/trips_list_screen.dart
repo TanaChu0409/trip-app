@@ -613,7 +613,7 @@ class _JoinTripSheetState extends State<_JoinTripSheet> {
           children: [
             Text('邀請碼加入', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
-            const Text('輸入 6 碼分享碼後，會直接在 Supabase 建立 shared_access 紀錄。'),
+            const Text('輸入 6 碼分享碼後，加入旅程並開始協作（可編輯）。'),
             const SizedBox(height: 18),
             TextField(
               controller: _codeController,
@@ -633,7 +633,7 @@ class _JoinTripSheetState extends State<_JoinTripSheet> {
               onPressed: _isSubmitting ? null : _submit,
               style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(50)),
-              child: Text(_isSubmitting ? '加入中...' : '加入唯讀旅程'),
+              child: Text(_isSubmitting ? '加入中...' : '加入旅程'),
             ),
           ],
         ),

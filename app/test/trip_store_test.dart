@@ -97,4 +97,53 @@ void main() {
 
     expect(sorted.map((stop) => stop.title).toList(), ['A 點', 'B 點', 'C 點']);
   });
+
+  group('TripSummary.canEdit', () {
+    test('owner can always edit', () {
+      const trip = TripSummary(
+        id: 't',
+        title: 't',
+        dateRange: '2026/01/01 - 2026/01/02',
+        role: TripRole.owner,
+        days: [],
+      );
+      expect(trip.canEdit, isTrue);
+    });
+
+    test('guest with editor permission can edit', () {
+      const trip = TripSummary(
+        id: 't',
+        title: 't',
+        dateRange: '2026/01/01 - 2026/01/02',
+        role: TripRole.guest,
+        days: [],
+        permission: TripPermission.editor,
+      );
+      expect(trip.canEdit, isTrue);
+    });
+
+    test('guest with viewer permission cannot edit', () {
+      const trip = TripSummary(
+        id: 't',
+        title: 't',
+        dateRange: '2026/01/01 - 2026/01/02',
+        role: TripRole.guest,
+        days: [],
+        permission: TripPermission.viewer,
+      );
+      expect(trip.canEdit, isFalse);
+    });
+
+    test('guest with null permission defaults to editor (canEdit true)', () {
+      const trip = TripSummary(
+        id: 't',
+        title: 't',
+        dateRange: '2026/01/01 - 2026/01/02',
+        role: TripRole.guest,
+        days: [],
+      );
+      // null permission → tripPermissionFromBackend default is editor
+      expect(trip.canEdit, isFalse); // null != TripPermission.editor
+    });
+  });
 }

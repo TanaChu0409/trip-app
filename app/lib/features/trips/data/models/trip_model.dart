@@ -1,5 +1,18 @@
 enum TripRole { owner, guest }
 
+enum TripPermission { editor, viewer }
+
+TripPermission tripPermissionFromBackend(String? value) {
+  switch (value) {
+    case 'editor':
+      return TripPermission.editor;
+    case 'viewer':
+      return TripPermission.viewer;
+    default:
+      return TripPermission.editor;
+  }
+}
+
 class ParkingSpot {
   const ParkingSpot({
     this.id,
@@ -174,6 +187,7 @@ class TripSummary {
     this.shareCode,
     this.sharedFromTripId,
     this.color,
+    this.permission,
   });
 
   final String id;
@@ -185,6 +199,13 @@ class TripSummary {
   final String? sharedFromTripId;
   final String? color;
 
+  /// Permission for guests. `null` when [role] is [TripRole.owner].
+  final TripPermission? permission;
+
+  /// Whether the current user may edit this trip's content.
+  bool get canEdit =>
+      role == TripRole.owner || permission == TripPermission.editor;
+
   TripSummary copyWith({
     String? id,
     String? title,
@@ -194,6 +215,7 @@ class TripSummary {
     String? shareCode,
     String? sharedFromTripId,
     String? color,
+    TripPermission? permission,
   }) {
     return TripSummary(
       id: id ?? this.id,
@@ -204,6 +226,7 @@ class TripSummary {
       shareCode: shareCode ?? this.shareCode,
       sharedFromTripId: sharedFromTripId ?? this.sharedFromTripId,
       color: color ?? this.color,
+      permission: permission ?? this.permission,
     );
   }
 

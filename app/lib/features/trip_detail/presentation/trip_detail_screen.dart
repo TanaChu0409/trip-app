@@ -94,7 +94,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
 
         _syncTabController(trip.days.isEmpty ? 1 : trip.days.length);
 
-        final isReadOnly = trip.role == TripRole.guest;
+        final isReadOnly = !trip.canEdit;
         final tripColor = colorFromHex(trip.color);
         final tripColorSoft = tintColor(tripColor, amount: 0.84);
 
@@ -132,9 +132,8 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                     child: Column(
                       children: [
                         _TripHeader(
-                          title: trip.title,
+                          trip: trip,
                           tripColor: tripColor,
-                          isReadOnly: isReadOnly,
                           onBackPressed: () => context.go('/trips'),
                           onActionSelected: (action) =>
                               _handleAction(context, trip, action),
@@ -142,7 +141,6 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                         _TripSummaryCard(
                           trip: trip,
                           tripColor: tripColor,
-                          isReadOnly: isReadOnly,
                           onCopyShareCode: () => _copyShareCode(context, trip),
                           onOpenNavigation: () =>
                               context.go('/trips/${trip.id}/navigation'),
@@ -215,6 +213,11 @@ class _TripDetailScreenState extends State<TripDetailScreen>
         return;
       case _TripDetailAction.changeColor:
         await _changeTripColor(context, trip);
+        return;
+      case _TripDetailAction.manageMembers:
+        if (context.mounted) {
+          context.push('/trips/${trip.id}/members');
+        }
         return;
     }
   }
@@ -391,20 +394,18 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   }
 }
 
-enum _TripDetailAction { deleteTrip, leaveTrip, changeColor }
+enum _TripDetailAction { deleteTrip, leaveTrip, changeColor, manageMembers }
 
 class _TripHeader extends StatelessWidget {
   const _TripHeader({
-    required this.title,
+    required this.trip,
     required this.tripColor,
-    required this.isReadOnly,
     required this.onBackPressed,
     required this.onActionSelected,
   });
 
-  final String title;
+  final TripSummary trip;
   final Color tripColor;
-  final bool isReadOnly;
   final VoidCallback onBackPressed;
   final ValueChanged<_TripDetailAction> onActionSelected;
 
@@ -420,43 +421,73 @@ class _TripHeader extends StatelessWidget {
           ),
           Expanded(
             child: Text(
-              title,
+              trip.title,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
                     color: shadeColor(tripColor, amount: 0.2),
                   ),
             ),
           ),
-          if (isReadOnly)
-            PopupMenuButton<_TripDetailAction>(
-              tooltip: '旅程操作',
-              onSelected: onActionSelected,
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: _TripDetailAction.leaveTrip,
-                  child: Text('退出旅程'),
-                ),
-              ],
-              child: const Chip(label: Text('唯讀')),
-            )
-          else
-            PopupMenuButton<_TripDetailAction>(
-              tooltip: '旅程操作',
-              onSelected: onActionSelected,
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: _TripDetailAction.changeColor,
-                  child: Text('更改顏色'),
-                ),
-                PopupMenuItem(
-                  value: _TripDetailAction.deleteTrip,
-                  child: Text('刪除旅程'),
-                ),
-              ],
-              icon: const Icon(Icons.more_vert_rounded),
-            ),
+          _buildMenu(context),
         ],
       ),
+    );
+  }
+
+  Widget _buildMenu(BuildContext context) {
+    // Owner: can manage members, change color, delete trip
+    if (trip.role == TripRole.owner) {
+      return PopupMenuButton<_TripDetailAction>(
+        tooltip: '旅程操作',
+        onSelected: onActionSelected,
+        itemBuilder: (context) => const [
+          PopupMenuItem(
+            value: _TripDetailAction.manageMembers,
+            child: Text('成員管理'),
+          ),
+          PopupMenuItem(
+            value: _TripDetailAction.changeColor,
+            child: Text('更改顏色'),
+          ),
+          PopupMenuItem(
+            value: _TripDetailAction.deleteTrip,
+            child: Text('刪除旅程'),
+          ),
+        ],
+        icon: const Icon(Icons.more_vert_rounded),
+      );
+    }
+
+    // Editor guest: can change color and leave
+    if (trip.permission == TripPermission.editor) {
+      return PopupMenuButton<_TripDetailAction>(
+        tooltip: '旅程操作',
+        onSelected: onActionSelected,
+        itemBuilder: (context) => const [
+          PopupMenuItem(
+            value: _TripDetailAction.changeColor,
+            child: Text('更改顏色'),
+          ),
+          PopupMenuItem(
+            value: _TripDetailAction.leaveTrip,
+            child: Text('退出旅程'),
+          ),
+        ],
+        icon: const Icon(Icons.more_vert_rounded),
+      );
+    }
+
+    // Viewer guest: can only leave
+    return PopupMenuButton<_TripDetailAction>(
+      tooltip: '旅程操作',
+      onSelected: onActionSelected,
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: _TripDetailAction.leaveTrip,
+          child: Text('退出旅程'),
+        ),
+      ],
+      child: const Chip(label: Text('唯讀')),
     );
   }
 }
@@ -465,14 +496,12 @@ class _TripSummaryCard extends StatelessWidget {
   const _TripSummaryCard({
     required this.trip,
     required this.tripColor,
-    required this.isReadOnly,
     required this.onCopyShareCode,
     required this.onOpenNavigation,
   });
 
   final TripSummary trip;
   final Color tripColor;
-  final bool isReadOnly;
   final VoidCallback onCopyShareCode;
   final VoidCallback onOpenNavigation;
 
@@ -515,11 +544,16 @@ class _TripSummaryCard extends StatelessWidget {
             Text('旅程摘要', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 10),
             Text(
-              isReadOnly
-                  ? '受邀唯讀模式，可接收時程提醒與地點提醒。'
-                  : 'Owner 模式，可直接新增、編輯、刪除與排序行程地點。',
+              switch (trip.role) {
+                TripRole.owner =>
+                  'Owner 模式，可直接新增、編輯、刪除與排序行程地點。',
+                TripRole.guest =>
+                  trip.permission == TripPermission.editor
+                      ? '協作模式，可新增、編輯、刪除行程地點與更改顏色。'
+                      : '受邀唯讀模式，可接收時程提醒與地點提醒。',
+              },
             ),
-            if (!isReadOnly && trip.shareCode != null) ...[
+            if (trip.role == TripRole.owner && trip.shareCode != null) ...[
               const SizedBox(height: 16),
               _ShareCodePanel(
                 shareCode: trip.shareCode!,

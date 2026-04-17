@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:trip_planner_app/features/trips/data/join_trip_result.dart';
+import 'package:trip_planner_app/features/trips/data/models/trip_member.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 
 class TripService {
@@ -26,13 +27,16 @@ class TripService {
 
     final sharedAccessRows = await _client
         .from('shared_access')
-        .select('trip_id')
+        .select('trip_id, permission')
         .eq('user_id', userId);
 
-    final sharedTripIds = sharedAccessRows
-        .map((row) => row['trip_id'] as String?)
-        .whereType<String>()
-        .toList(growable: false);
+    final permissionByTripId = <String, TripPermission>{
+      for (final row in sharedAccessRows)
+        row['trip_id'] as String:
+            tripPermissionFromBackend(row['permission'] as String?),
+    };
+
+    final sharedTripIds = permissionByTripId.keys.toList(growable: false);
 
     final sharedRows = sharedTripIds.isEmpty
         ? const <dynamic>[]
@@ -45,8 +49,11 @@ class TripService {
 
     final ownedTrips =
         await _assembleTrips(rows: ownedRows, role: TripRole.owner);
-    final sharedTrips =
-        await _assembleTrips(rows: sharedRows, role: TripRole.guest);
+    final sharedTrips = await _assembleTrips(
+      rows: sharedRows,
+      role: TripRole.guest,
+      permissionByTripId: permissionByTripId,
+    );
 
     return [...ownedTrips, ...sharedTrips];
   }
@@ -97,7 +104,11 @@ class TripService {
     throw StateError('Unable to generate a unique share code.');
   }
 
-  Future<TripSummary?> fetchTripById(String tripId, {TripRole? role}) async {
+  Future<TripSummary?> fetchTripById(
+    String tripId, {
+    TripRole? role,
+    TripPermission? permission,
+  }) async {
     final rows = await _client
         .from('trips')
         .select('id, title, start_date, end_date, share_code, owner_id, color')
@@ -110,7 +121,14 @@ class TripService {
 
     final row = Map<String, dynamic>.from(rows.first);
     final resolvedRole = role ?? _resolveRole(row);
-    final trips = await _assembleTrips(rows: [row], role: resolvedRole);
+    final permissionMap = (resolvedRole == TripRole.guest && permission != null)
+        ? {tripId: permission}
+        : <String, TripPermission>{};
+    final trips = await _assembleTrips(
+      rows: [row],
+      role: resolvedRole,
+      permissionByTripId: permissionMap,
+    );
     return trips.isEmpty ? null : trips.first;
   }
 
@@ -152,7 +170,13 @@ class TripService {
         'Invalid join_trip_by_code RPC response: success status was missing the required trip_id field.',
       );
     }
-    final trip = await fetchTripById(tripId, role: TripRole.guest);
+    final rawPermission = payload['permission'] as String?;
+    final permission = tripPermissionFromBackend(rawPermission);
+    final trip = await fetchTripById(
+      tripId,
+      role: TripRole.guest,
+      permission: permission,
+    );
     if (trip == null) {
       return const JoinTripByCodeResult(
           status: JoinTripByCodeStatus.tripNotFound);
@@ -185,17 +209,52 @@ class TripService {
   }
 
   Future<void> updateTripColor(String tripId, String? color) async {
-    final userId = _requireUserId();
+    // RLS enforces that only owners and editors can update trips.
     await _client
         .from('trips')
         .update({'color': color})
-        .eq('id', tripId)
-        .eq('owner_id', userId);
+        .eq('id', tripId);
+  }
+
+  /// Fetch all members (guests) for a trip, joined with their profiles.
+  /// Only the trip owner can call this (enforced by RLS on shared_access).
+  Future<List<TripMember>> fetchTripMembers(String tripId) async {
+    final rows = await _client
+        .from('shared_access')
+        .select('id, trip_id, user_id, permission, joined_at, profiles(id, display_name, email, avatar_url)')
+        .eq('trip_id', tripId);
+    return [
+      for (final row in rows)
+        TripMember.fromJson(Map<String, dynamic>.from(row as Map)),
+    ];
+  }
+
+  /// Update a member's permission. Only the trip owner may call this.
+  Future<void> updateMemberPermission(
+    String tripId,
+    String userId,
+    TripPermission permission,
+  ) async {
+    await _client
+        .from('shared_access')
+        .update({'permission': permission.name})
+        .eq('trip_id', tripId)
+        .eq('user_id', userId);
+  }
+
+  /// Remove a member from a trip. Only the trip owner may call this.
+  Future<void> removeMember(String tripId, String userId) async {
+    await _client
+        .from('shared_access')
+        .delete()
+        .eq('trip_id', tripId)
+        .eq('user_id', userId);
   }
 
   Future<List<TripSummary>> _assembleTrips({
     required List<dynamic> rows,
     required TripRole role,
+    Map<String, TripPermission> permissionByTripId = const {},
   }) async {
     if (rows.isEmpty) {
       return const [];
@@ -262,6 +321,7 @@ class TripService {
             days: daysByTripId[row['id'] as String] ?? const [],
             shareCode: row['share_code'] as String?,
             color: row['color'] as String?,
+            permission: permissionByTripId[row['id'] as String],
           ),
         )
         .toList(growable: false);

@@ -62,10 +62,17 @@ class TripCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  if (trip.role == TripRole.guest)
-                    const Chip(label: Text('唯讀'))
-                  else
-                    const Chip(label: Text('可編輯')),
+                  Chip(
+                    label: Text(
+                      switch (trip.role) {
+                        TripRole.owner => '擁有者',
+                        TripRole.guest =>
+                          trip.permission == TripPermission.editor
+                              ? '可編輯'
+                              : '唯讀',
+                      },
+                    ),
+                  ),
                   PopupMenuButton<TripCardAction>(
                     tooltip: '旅程操作',
                     onSelected: onActionSelected,
@@ -105,7 +112,13 @@ class TripCard extends StatelessWidget {
                     textColor: tripColorStrong,
                   ),
                   _MetaPill(
-                    label: trip.role == TripRole.owner ? '我的旅程' : '分享給我的',
+                    label: switch (trip.role) {
+                      TripRole.owner => '我的旅程',
+                      TripRole.guest =>
+                        trip.permission == TripPermission.editor
+                            ? '協作中'
+                            : '唯讀分享',
+                    },
                     backgroundColor: tripColorSoft,
                     textColor: tripColorStrong,
                   ),

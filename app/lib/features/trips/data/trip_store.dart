@@ -3,7 +3,9 @@ import 'package:trip_planner_app/features/notifications/services/notification_se
 import 'package:trip_planner_app/features/trip_detail/data/parking_spot_service.dart';
 import 'package:trip_planner_app/features/trip_detail/data/stop_service.dart';
 import 'package:trip_planner_app/features/trips/data/join_trip_result.dart';
+import 'package:trip_planner_app/features/trips/data/models/trip_member.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
+import 'package:trip_planner_app/features/trips/data/trip_realtime_service.dart';
 import 'package:trip_planner_app/features/trips/data/trip_service.dart';
 
 class TripStore extends ChangeNotifier {
@@ -12,9 +14,11 @@ class TripStore extends ChangeNotifier {
   static final TripStore instance = TripStore._();
 
   final List<TripSummary> _trips = [];
+  final Map<String, List<TripMember>> _membersByTripId = {};
   final TripService _tripService = TripService.instance;
   final StopService _stopService = StopService.instance;
   final ParkingSpotService _parkingSpotService = ParkingSpotService.instance;
+  final TripRealtimeService _realtimeService = TripRealtimeService.instance;
 
   Future<void>? _loadFuture;
   bool _isLoading = false;
@@ -369,8 +373,9 @@ class TripStore extends ChangeNotifier {
   }
 
   Future<bool> updateTripColor(String tripId, String? color) async {
-    final index = _trips
-        .indexWhere((trip) => trip.id == tripId && trip.role == TripRole.owner);
+    final index = _trips.indexWhere(
+      (trip) => trip.id == tripId && trip.canEdit,
+    );
     if (index == -1) {
       return false;
     }
@@ -381,9 +386,48 @@ class TripStore extends ChangeNotifier {
     return true;
   }
 
+  /// Fetch the member list for [tripId] (owner-only operation).
+  Future<List<TripMember>> fetchTripMembers(String tripId) async {
+    final members = await _tripService.fetchTripMembers(tripId);
+    _membersByTripId[tripId] = members;
+    return members;
+  }
+
+  List<TripMember>? cachedMembers(String tripId) => _membersByTripId[tripId];
+
+  /// Update a member's permission (owner-only).
+  Future<void> updateMemberPermission(
+    String tripId,
+    String userId,
+    TripPermission permission,
+  ) async {
+    await _tripService.updateMemberPermission(tripId, userId, permission);
+    final members = _membersByTripId[tripId];
+    if (members != null) {
+      _membersByTripId[tripId] = [
+        for (final m in members)
+          m.userId == userId ? m.copyWith(permission: permission) : m,
+      ];
+      notifyListeners();
+    }
+  }
+
+  /// Remove a member from the trip (owner-only).
+  Future<void> removeMember(String tripId, String userId) async {
+    await _tripService.removeMember(tripId, userId);
+    final members = _membersByTripId[tripId];
+    if (members != null) {
+      _membersByTripId[tripId] =
+          members.where((m) => m.userId != userId).toList();
+      notifyListeners();
+    }
+  }
+
   void resetForTests() {
     _trips.clear();
+    _membersByTripId.clear();
     NotificationService.instance.resetForTests();
+    _realtimeService.unsubscribe();
     _loadFuture = null;
     _isLoading = false;
     _isInitialized = false;
@@ -408,6 +452,11 @@ class TripStore extends ChangeNotifier {
       for (final trip in _trips) {
         await NotificationService.instance.scheduleTripReminders(trip);
       }
+      // Subscribe to Realtime for permission/removal changes.
+      _realtimeService.subscribe(
+        onPermissionChanged: _onPermissionChanged,
+        onRemovedFromTrip: _onRemovedFromTrip,
+      );
     } catch (error) {
       _loadError = error;
       _isInitialized = true;
@@ -416,6 +465,22 @@ class TripStore extends ChangeNotifier {
       _loadFuture = null;
       notifyListeners();
     }
+  }
+
+  void _onPermissionChanged(String tripId, TripPermission permission) {
+    final index = _trips.indexWhere((t) => t.id == tripId);
+    if (index == -1) return;
+    _trips[index] = _trips[index].copyWith(permission: permission);
+    notifyListeners();
+  }
+
+  void _onRemovedFromTrip(String tripId) {
+    final index = _trips.indexWhere((t) => t.id == tripId);
+    if (index == -1) return;
+    _trips.removeAt(index);
+    _membersByTripId.remove(tripId);
+    NotificationService.instance.cancelTripReminders(tripId);
+    notifyListeners();
   }
 
   Future<void> _refreshTripReminders(TripSummary trip) async {
@@ -514,8 +579,8 @@ class TripStore extends ChangeNotifier {
   }
 
   _DayLocation? _findEditableDayLocation(String tripId, String dayId) {
-    final tripIndex = _trips
-        .indexWhere((trip) => trip.id == tripId && trip.role == TripRole.owner);
+    final tripIndex =
+        _trips.indexWhere((trip) => trip.id == tripId && trip.canEdit);
     if (tripIndex == -1) {
       return null;
     }
