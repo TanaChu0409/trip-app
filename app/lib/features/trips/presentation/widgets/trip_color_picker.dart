@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart' as fcp;
 import 'package:trip_planner_app/core/theme/app_theme.dart';
 
 class TripColorPicker extends StatelessWidget {
@@ -22,6 +23,8 @@ class TripColorPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selectedHex = selectedColor ?? TripColors.defaultHex;
+    final isCustom = selectedColor != null &&
+        !TripColors.presets.any((p) => p.hex == selectedColor);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -52,10 +55,54 @@ class TripColorPicker extends StatelessWidget {
                 isSelected: option.hex == selectedHex,
                 onTap: () => onColorChanged(option.hex),
               ),
+            _CustomColorOption(
+              isSelected: isCustom,
+              customColor: isCustom ? colorFromHex(selectedColor) : null,
+              onTap: () => _showColorPickerDialog(context),
+            ),
           ],
         ),
       ],
     );
+  }
+
+  Future<void> _showColorPickerDialog(BuildContext context) async {
+    final initialColor = colorFromHex(selectedColor, fallback: TripColors.presets.first.color);
+    Color pickedColor = initialColor;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('選擇自訂顏色'),
+        contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        content: SingleChildScrollView(
+          child: fcp.ColorPicker(
+            pickerColor: pickedColor,
+            onColorChanged: (color) => pickedColor = color,
+            colorPickerWidth: 280,
+            pickerAreaHeightPercent: 0.7,
+            enableAlpha: false,
+            labelTypes: const [],
+            displayThumbColor: true,
+            paletteType: fcp.PaletteType.hsvWithHue,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('確認'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      onColorChanged(hexFromColor(pickedColor));
+    }
   }
 }
 
@@ -164,6 +211,75 @@ class _TripColorOption extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             option.label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.text,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CustomColorOption extends StatelessWidget {
+  const _CustomColorOption({
+    required this.isSelected,
+    required this.onTap,
+    this.customColor,
+  });
+
+  final bool isSelected;
+  final VoidCallback onTap;
+  final Color? customColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayColor = customColor ?? Colors.white;
+    final hasCustom = customColor != null;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: displayColor,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isSelected ? AppColors.text : AppColors.accentSoft,
+                width: isSelected ? 3 : 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: hasCustom
+                      ? displayColor.withValues(alpha: 0.28)
+                      : const Color(0x1A00264D),
+                  blurRadius: isSelected ? 14 : 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: isSelected && hasCustom
+                ? Icon(
+                    Icons.check_rounded,
+                    color: onAccentColor(displayColor),
+                  )
+                : Icon(
+                    Icons.palette_outlined,
+                    color: hasCustom
+                        ? onAccentColor(displayColor)
+                        : AppColors.muted,
+                  ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '自訂顏色',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.text,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
