@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:trip_planner_app/core/theme/app_theme.dart';
+import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 import 'package:trip_planner_app/features/trips/data/trip_store.dart';
 
 class NavigationModeScreen extends StatefulWidget {
@@ -14,9 +15,14 @@ class NavigationModeScreen extends StatefulWidget {
 class _NavigationModeScreenState extends State<NavigationModeScreen> {
   final TripStore _tripStore = TripStore.instance;
 
+  TripSummary? _currentTrip;
+  bool _isStoreLoading = false;
+
   @override
   void initState() {
     super.initState();
+    _currentTrip = _tripStore.findById(widget.tripId);
+    _isStoreLoading = _tripStore.isLoading;
     _tripStore.addListener(_handleStoreChanged);
     _tripStore.ensureLoaded();
   }
@@ -27,14 +33,25 @@ class _NavigationModeScreenState extends State<NavigationModeScreen> {
     super.dispose();
   }
 
+  /// Rebuilds only when the trip for this screen or the loading state changes,
+  /// ignoring notifications caused by mutations to other trips in the store.
   void _handleStoreChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final newTrip = _tripStore.findById(widget.tripId);
+    final newLoading = _tripStore.isLoading;
+    if (identical(_currentTrip, newTrip) && _isStoreLoading == newLoading) {
+      return;
+    }
+    setState(() {
+      _currentTrip = newTrip;
+      _isStoreLoading = newLoading;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final trip = _tripStore.findById(widget.tripId);
-    if (_tripStore.isLoading && trip == null) {
+    final trip = _currentTrip;
+    if (_isStoreLoading && trip == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (trip == null || trip.days.isEmpty) {
