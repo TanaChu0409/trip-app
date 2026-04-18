@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:trip_planner_app/features/notifications/services/notification_service.dart';
 import 'package:trip_planner_app/features/trip_detail/data/parking_spot_service.dart';
@@ -466,10 +468,15 @@ class TripStore extends ChangeNotifier {
   @override
   void dispose() {
     // Flutter's dispose() is synchronous and cannot be made async.
-    // Calling unsubscribe() here starts the async cleanup; the Future is
-    // intentionally not awaited.  The main cleanup path for production code
-    // is clearForSignOut(), which does await the unsubscribe.
-    _realtimeService.unsubscribe();
+    // unsubscribe() is fire-and-forget here; errors are caught and logged so
+    // they don't become noisy unhandled zone-level exceptions during teardown.
+    // The main cleanup path for production code is clearForSignOut(), which
+    // does await the unsubscribe.
+    unawaited(
+      _realtimeService.unsubscribe().catchError((Object error, StackTrace st) {
+        debugPrint('TripStore.dispose: unsubscribe failed: $error');
+      }),
+    );
     super.dispose();
   }
 
