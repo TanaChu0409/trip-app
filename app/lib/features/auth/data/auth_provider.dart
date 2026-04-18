@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:trip_planner_app/features/auth/data/auth_service.dart';
+import 'package:trip_planner_app/features/trips/data/trip_store.dart';
 
 final authStateChangesProvider = StreamProvider<bool>((ref) {
   final authService = ref.watch(authServiceProvider);
@@ -38,7 +39,16 @@ class AuthStateListenable extends ChangeNotifier {
         return;
       }
 
+      final wasAuthenticated = _isAuthenticated;
       _isAuthenticated = isAuthenticated;
+
+      // When the user signs out (or their session expires), clear all cached
+      // trip data and cancel the Realtime subscription so the next user starts
+      // with a clean slate.
+      if (wasAuthenticated && !isAuthenticated) {
+        TripStore.instance.clearForSignOut();
+      }
+
       notifyListeners();
     });
   }

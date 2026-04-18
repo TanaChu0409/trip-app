@@ -26,11 +26,14 @@ class DayTab extends StatefulWidget {
   State<DayTab> createState() => _DayTabState();
 }
 
-class _DayTabState extends State<DayTab> {
+class _DayTabState extends State<DayTab> with AutomaticKeepAliveClientMixin {
   final GlobalKey _addButtonKey = GlobalKey();
   bool _hasQueuedVisibilityCheck = false;
   bool _lastReportedVisibility = false;
   Size _viewportSize = Size.zero;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -100,6 +103,7 @@ class _DayTabState extends State<DayTab> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // required by AutomaticKeepAliveClientMixin
     _viewportSize = MediaQuery.sizeOf(context);
     _scheduleVisibilityCheck();
 

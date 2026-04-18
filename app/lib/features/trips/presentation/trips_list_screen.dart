@@ -24,116 +24,108 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
   @override
   void initState() {
     super.initState();
-    _tripStore.addListener(_handleTripsChanged);
     _tripStore.ensureLoaded();
   }
 
   @override
-  void dispose() {
-    _tripStore.removeListener(_handleTripsChanged);
-    super.dispose();
-  }
-
-  void _handleTripsChanged() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final trips = _tripStore.trips;
-    final ownedTrips =
-        trips.where((trip) => trip.role == TripRole.owner).toList();
-    final sharedTrips =
-        trips.where((trip) => trip.role == TripRole.guest).toList();
-    final isLoading = _tripStore.isLoading && trips.isEmpty;
-    final hasLoadError = _tripStore.loadError != null && trips.isEmpty;
+    return AnimatedBuilder(
+      animation: _tripStore,
+      builder: (context, _) {
+        final trips = _tripStore.trips;
+        final ownedTrips =
+            trips.where((trip) => trip.role == TripRole.owner).toList();
+        final sharedTrips =
+            trips.where((trip) => trip.role == TripRole.guest).toList();
+        final isLoading = _tripStore.isLoading && trips.isEmpty;
+        final hasLoadError = _tripStore.loadError != null && trips.isEmpty;
 
-    return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCreateTripSheet(context),
-        backgroundColor: AppColors.accent,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('新增旅程'),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFF5F9FE), Color(0xFFDDE8F3)],
+        return Scaffold(
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () => _showCreateTripSheet(context),
+            backgroundColor: AppColors.accent,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('新增旅程'),
           ),
-        ),
-        child: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 96),
-            children: [
-              Row(
+          body: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFF5F9FE), Color(0xFFDDE8F3)],
+              ),
+            ),
+            child: SafeArea(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 96),
                 children: [
-                  Expanded(
-                    child: Text(
-                      '旅遊規劃APP',
-                      style: Theme.of(context).textTheme.headlineLarge,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '旅遊規劃APP',
+                          style: Theme.of(context).textTheme.headlineLarge,
+                        ),
+                      ),
+                      IconButton.outlined(
+                        tooltip: '登出',
+                        onPressed: () => _signOut(context),
+                        icon: const Icon(Icons.logout_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _HeroPanel(ownedTrips: ownedTrips),
+                  const SizedBox(height: 24),
+                  if (isLoading) ...[
+                    const Center(child: CircularProgressIndicator()),
+                    const SizedBox(height: 24),
+                  ] else if (hasLoadError) ...[
+                    _LoadErrorCard(
+                      onRetry: () => _tripStore.reloadTrips(),
+                      errorMessage:
+                          SupabaseErrorFormatter.userMessage(_tripStore.loadError!),
                     ),
+                    const SizedBox(height: 24),
+                  ],
+                  _SectionHeader(
+                    title: '我的旅程',
+                    actionLabel: '邀請碼加入',
+                    onPressed: () => _showJoinTripSheet(context),
                   ),
-                  IconButton.outlined(
-                    tooltip: '登出',
-                    onPressed: () => _signOut(context),
-                    icon: const Icon(Icons.logout_rounded),
-                  ),
+                  const SizedBox(height: 12),
+                  if (!isLoading && ownedTrips.isEmpty)
+                    const _EmptyTripsCard(message: '目前沒有任何旅程，請先建立一個新的旅程。'),
+                  for (final trip in ownedTrips) ...[
+                    TripCard(
+                      trip: trip,
+                      onTap: () => context.go('/trips/${trip.id}'),
+                      onActionSelected: (action) =>
+                          _handleTripAction(context, trip, action),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  const SizedBox(height: 16),
+                  const _SectionHeader(title: '分享給我的'),
+                  const SizedBox(height: 12),
+                  if (!isLoading && sharedTrips.isEmpty)
+                    const _EmptyTripsCard(message: '目前沒有加入任何分享旅程。'),
+                  for (final trip in sharedTrips) ...[
+                    TripCard(
+                      trip: trip,
+                      onTap: () => context.go('/trips/${trip.id}'),
+                      onActionSelected: (action) =>
+                          _handleTripAction(context, trip, action),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                 ],
               ),
-              const SizedBox(height: 24),
-              _HeroPanel(ownedTrips: ownedTrips),
-              const SizedBox(height: 24),
-              if (isLoading) ...[
-                const Center(child: CircularProgressIndicator()),
-                const SizedBox(height: 24),
-              ] else if (hasLoadError) ...[
-                _LoadErrorCard(
-                  onRetry: () => _tripStore.reloadTrips(),
-                  errorMessage:
-                      SupabaseErrorFormatter.userMessage(_tripStore.loadError!),
-                ),
-                const SizedBox(height: 24),
-              ],
-              _SectionHeader(
-                title: '我的旅程',
-                actionLabel: '邀請碼加入',
-                onPressed: () => _showJoinTripSheet(context),
-              ),
-              const SizedBox(height: 12),
-              if (!isLoading && ownedTrips.isEmpty)
-                const _EmptyTripsCard(message: '目前沒有任何旅程，請先建立一個新的旅程。'),
-              for (final trip in ownedTrips) ...[
-                TripCard(
-                  trip: trip,
-                  onTap: () => context.go('/trips/${trip.id}'),
-                  onActionSelected: (action) =>
-                      _handleTripAction(context, trip, action),
-                ),
-                const SizedBox(height: 12),
-              ],
-              const SizedBox(height: 16),
-              const _SectionHeader(title: '分享給我的'),
-              const SizedBox(height: 12),
-              if (!isLoading && sharedTrips.isEmpty)
-                const _EmptyTripsCard(message: '目前沒有加入任何分享旅程。'),
-              for (final trip in sharedTrips) ...[
-                TripCard(
-                  trip: trip,
-                  onTap: () => context.go('/trips/${trip.id}'),
-                  onActionSelected: (action) =>
-                      _handleTripAction(context, trip, action),
-                ),
-                const SizedBox(height: 12),
-              ],
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

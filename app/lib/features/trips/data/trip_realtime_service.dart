@@ -20,10 +20,15 @@ class TripRealtimeService {
   PermissionChangedCallback? _onPermissionChanged;
   RemovedFromTripCallback? _onRemovedFromTrip;
 
-  void subscribe({
+  Future<void> subscribe({
     required PermissionChangedCallback onPermissionChanged,
     required RemovedFromTripCallback onRemovedFromTrip,
-  }) {
+  }) async {
+    // Always clean up any existing channel before creating a new one so that
+    // repeated calls to subscribe() (e.g. from reloadTrips()) never leave
+    // stale channels open.
+    await unsubscribe();
+
     _onPermissionChanged = onPermissionChanged;
     _onRemovedFromTrip = onRemovedFromTrip;
 

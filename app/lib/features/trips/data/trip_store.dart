@@ -435,6 +435,27 @@ class TripStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Clears all cached data and cancels the Realtime subscription.
+  /// Call this whenever the current user signs out so that the next user
+  /// starts with a clean slate and the old Realtime channel is released.
+  Future<void> clearForSignOut() async {
+    await _realtimeService.unsubscribe();
+    _trips.clear();
+    _membersByTripId.clear();
+    NotificationService.instance.resetForTests();
+    _loadFuture = null;
+    _isLoading = false;
+    _isInitialized = false;
+    _loadError = null;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _realtimeService.unsubscribe();
+    super.dispose();
+  }
+
   Future<void> _loadTrips() async {
     _isLoading = true;
     if (!_isInitialized) {
@@ -453,7 +474,7 @@ class TripStore extends ChangeNotifier {
         await NotificationService.instance.scheduleTripReminders(trip);
       }
       // Subscribe to Realtime for permission/removal changes.
-      _realtimeService.subscribe(
+      await _realtimeService.subscribe(
         onPermissionChanged: _onPermissionChanged,
         onRemovedFromTrip: _onRemovedFromTrip,
       );
@@ -528,28 +549,31 @@ class TripStore extends ChangeNotifier {
     final normalized = _normalizeParkingSpots(next);
     final previousIds =
         previous.map((item) => item.id).whereType<String>().toSet();
-    final saved = <ParkingSpot>[];
 
-    for (final parkingSpot in normalized) {
-      if (parkingSpot.id != null && previousIds.contains(parkingSpot.id)) {
-        final updated =
-            await _parkingSpotService.updateParkingSpot(parkingSpot);
-        saved.add(updated.copyWith(sortOrder: parkingSpot.sortOrder));
-      } else {
-        final created = await _parkingSpotService.createParkingSpot(
-          stopId: stopId,
-          parkingSpot: parkingSpot.copyWith(id: null),
-        );
-        saved.add(created.copyWith(sortOrder: parkingSpot.sortOrder));
-      }
-    }
+    // Create / update all spots in parallel to reduce round-trip latency.
+    final saved = await Future.wait(
+      normalized.map((parkingSpot) async {
+        if (parkingSpot.id != null && previousIds.contains(parkingSpot.id)) {
+          final updated =
+              await _parkingSpotService.updateParkingSpot(parkingSpot);
+          return updated.copyWith(sortOrder: parkingSpot.sortOrder);
+        } else {
+          final created = await _parkingSpotService.createParkingSpot(
+            stopId: stopId,
+            parkingSpot: parkingSpot.copyWith(id: null),
+          );
+          return created.copyWith(sortOrder: parkingSpot.sortOrder);
+        }
+      }),
+    );
 
+    // Delete removed spots in parallel.
     final savedIds = saved.map((item) => item.id).whereType<String>().toSet();
-    for (final removed in previous) {
-      if (removed.id != null && !savedIds.contains(removed.id)) {
-        await _parkingSpotService.deleteParkingSpot(removed.id!);
-      }
-    }
+    await Future.wait([
+      for (final removed in previous)
+        if (removed.id != null && !savedIds.contains(removed.id))
+          _parkingSpotService.deleteParkingSpot(removed.id!),
+    ]);
 
     await _parkingSpotService.reorderParkingSpots(
         stopId: stopId, parkingSpots: saved);

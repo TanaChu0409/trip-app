@@ -24,19 +24,50 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   final TripStore _tripStore = TripStore.instance;
   bool _hideFloatingActionButton = false;
 
+  // Cached trip reference – rebuilt only when this specific trip changes.
+  TripSummary? _currentTrip;
+  bool _isStoreLoading = false;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 1, vsync: this);
+    _currentTrip = _tripStore.findById(widget.tripId);
+    _isStoreLoading = _tripStore.isLoading;
+    final initialDayCount =
+        _currentTrip == null || _currentTrip!.days.isEmpty
+            ? 1
+            : _currentTrip!.days.length;
+    _tabController = TabController(length: initialDayCount, vsync: this);
     _tabController.addListener(_handleTabChanged);
+    _tripStore.addListener(_handleStoreChanged);
     _tripStore.ensureLoaded();
   }
 
   @override
   void dispose() {
+    _tripStore.removeListener(_handleStoreChanged);
     _tabController.removeListener(_handleTabChanged);
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// Called on every TripStore notification.  Rebuilds only when the trip
+  /// that belongs to this screen changes, avoiding unnecessary redraws caused
+  /// by mutations to other trips in the store.
+  void _handleStoreChanged() {
+    if (!mounted) return;
+    final newTrip = _tripStore.findById(widget.tripId);
+    final newLoading = _tripStore.isLoading;
+    if (identical(_currentTrip, newTrip) && _isStoreLoading == newLoading) {
+      return;
+    }
+    setState(() {
+      _currentTrip = newTrip;
+      _isStoreLoading = newLoading;
+      if (newTrip != null) {
+        _syncTabController(newTrip.days.isEmpty ? 1 : newTrip.days.length);
+      }
+    });
   }
 
   void _syncTabController(int nextLength) {
@@ -79,123 +110,116 @@ class _TripDetailScreenState extends State<TripDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _tripStore,
-      builder: (context, _) {
-        final trip = _tripStore.findById(widget.tripId);
-        if (_tripStore.isLoading && trip == null) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (trip == null) {
-          return const Scaffold(body: Center(child: Text('找不到旅程')));
-        }
+    final trip = _currentTrip;
+    if (_isStoreLoading && trip == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (trip == null) {
+      return const Scaffold(body: Center(child: Text('找不到旅程')));
+    }
 
-        _syncTabController(trip.days.isEmpty ? 1 : trip.days.length);
+    final isReadOnly = !trip.canEdit;
+    final tripColor = colorFromHex(trip.color);
+    final tripColorSoft = tintColor(tripColor, amount: 0.84);
 
-        final isReadOnly = !trip.canEdit;
-        final tripColor = colorFromHex(trip.color);
-        final tripColorSoft = tintColor(tripColor, amount: 0.84);
-
-        return Scaffold(
-          resizeToAvoidBottomInset: false,
-          floatingActionButton: isReadOnly ||
-                  trip.days.isEmpty ||
-                  _hideFloatingActionButton
-              ? null
-              : FloatingActionButton.extended(
-                  onPressed: () {
-                    final currentDay = trip.days[
-                        _tabController.index.clamp(0, trip.days.length - 1)];
-                    context.push(
-                      '/trips/${trip.id}/days/${currentDay.id}/stops/new',
-                    );
-                  },
-                  backgroundColor: tripColor,
-                  foregroundColor: onAccentColor(tripColor),
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('新增地點'),
-                ),
-          body: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [tintColor(tripColor, amount: 0.94), tripColorSoft],
-              ),
+    return Scaffold(
+      resizeToAvoidBottomInset: false,
+      floatingActionButton: isReadOnly ||
+              trip.days.isEmpty ||
+              _hideFloatingActionButton
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () {
+                final currentDay = trip.days[
+                    _tabController.index.clamp(0, trip.days.length - 1)];
+                context.push(
+                  '/trips/${trip.id}/days/${currentDay.id}/stops/new',
+                );
+              },
+              backgroundColor: tripColor,
+              foregroundColor: onAccentColor(tripColor),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('新增地點'),
             ),
-            child: SafeArea(
-              child: NestedScrollView(
-                headerSliverBuilder: (context, innerBoxIsScrolled) => [
-                  SliverToBoxAdapter(
-                    child: Column(
-                      children: [
-                        _TripHeader(
-                          trip: trip,
-                          tripColor: tripColor,
-                          onBackPressed: () => context.go('/trips'),
-                          onActionSelected: (action) =>
-                              _handleAction(context, trip, action),
-                        ),
-                        _TripSummaryCard(
-                          trip: trip,
-                          tripColor: tripColor,
-                          onCopyShareCode: () => _copyShareCode(context, trip),
-                          onOpenNavigation: () =>
-                              context.go('/trips/${trip.id}/navigation'),
-                        ),
-                      ],
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [tintColor(tripColor, amount: 0.94), tripColorSoft],
+          ),
+        ),
+        child: SafeArea(
+          child: NestedScrollView(
+            headerSliverBuilder: (context, innerBoxIsScrolled) => [
+              SliverToBoxAdapter(
+                child: Column(
+                  children: [
+                    _TripHeader(
+                      trip: trip,
+                      tripColor: tripColor,
+                      onBackPressed: () => context.go('/trips'),
+                      onActionSelected: (action) =>
+                          _handleAction(context, trip, action),
                     ),
-                  ),
-                  if (trip.days.isNotEmpty)
-                    SliverPersistentHeader(
-                      pinned: true,
-                      delegate: _TripDayTabBarHeaderDelegate(
-                        height: _tabBarHeaderHeight,
-                        child: Container(
-                          color: tintColor(tripColor, amount: 0.9),
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          alignment: Alignment.centerLeft,
-                          child: TabBar(
-                            controller: _tabController,
-                            labelColor: shadeColor(tripColor, amount: 0.16),
-                            unselectedLabelColor: AppColors.muted,
-                            indicatorColor: tripColor,
-                            isScrollable: true,
-                            tabs: [
-                              for (final day in trip.days)
-                                Tab(text: '${day.label} · ${day.dateLabel}'),
-                            ],
-                          ),
-                        ),
-                      ),
+                    _TripSummaryCard(
+                      trip: trip,
+                      tripColor: tripColor,
+                      onCopyShareCode: () => _copyShareCode(context, trip),
+                      onOpenNavigation: () =>
+                          context.go('/trips/${trip.id}/navigation'),
                     ),
-                ],
-                body: trip.days.isEmpty
-                    ? const Center(child: Text('尚未建立行程日'))
-                    : TabBarView(
+                  ],
+                ),
+              ),
+              if (trip.days.isNotEmpty)
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _TripDayTabBarHeaderDelegate(
+                    height: _tabBarHeaderHeight,
+                    child: Container(
+                      color: tintColor(tripColor, amount: 0.9),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      alignment: Alignment.centerLeft,
+                      child: TabBar(
                         controller: _tabController,
-                        children: [
-                          for (var index = 0;
-                              index < trip.days.length;
-                              index += 1)
-                            DayTab(
-                              tripId: trip.id,
-                              day: trip.days[index],
-                              tripColor: trip.color,
-                              isReadOnly: isReadOnly,
-                              isActive: index == _tabController.index,
-                              onAddButtonVisibilityChanged:
-                                  _handleBottomAddButtonVisibilityChanged,
-                            ),
+                        labelColor: shadeColor(tripColor, amount: 0.16),
+                        unselectedLabelColor: AppColors.muted,
+                        indicatorColor: tripColor,
+                        isScrollable: true,
+                        tabs: [
+                          for (final day in trip.days)
+                            Tab(text: '${day.label} · ${day.dateLabel}'),
                         ],
                       ),
-              ),
-            ),
+                    ),
+                  ),
+                ),
+            ],
+            body: trip.days.isEmpty
+                ? const Center(child: Text('尚未建立行程日'))
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      for (var index = 0;
+                          index < trip.days.length;
+                          index += 1)
+                        DayTab(
+                          tripId: trip.id,
+                          day: trip.days[index],
+                          tripColor: trip.color,
+                          isReadOnly: isReadOnly,
+                          isActive: index == _tabController.index,
+                          onAddButtonVisibilityChanged:
+                              _handleBottomAddButtonVisibilityChanged,
+                        ),
+                    ],
+                  ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 

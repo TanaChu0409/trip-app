@@ -17,7 +17,18 @@ class _NavigationModeScreenState extends State<NavigationModeScreen> {
   @override
   void initState() {
     super.initState();
+    _tripStore.addListener(_handleStoreChanged);
     _tripStore.ensureLoaded();
+  }
+
+  @override
+  void dispose() {
+    _tripStore.removeListener(_handleStoreChanged);
+    super.dispose();
+  }
+
+  void _handleStoreChanged() {
+    if (mounted) setState(() {});
   }
 
   @override

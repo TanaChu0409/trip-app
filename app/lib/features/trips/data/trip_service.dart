@@ -337,14 +337,11 @@ class TripService {
         .select('id, trip_id, date, label, subtitle, sort_order')
         .inFilter('trip_id', tripIds)
         .order('sort_order', ascending: true);
+    // The database already returns rows sorted by sort_order; no local
+    // re-sort is needed.
     final result = rows
         .map((row) => Map<String, dynamic>.from(row))
-        .toList(growable: true);
-    result.sort((a, b) {
-      final sortA = a['sort_order'] as int? ?? 0;
-      final sortB = b['sort_order'] as int? ?? 0;
-      return sortA.compareTo(sortB);
-    });
+        .toList(growable: false);
     return List<Map<String, dynamic>>.unmodifiable(result);
   }
 
