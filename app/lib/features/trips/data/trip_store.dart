@@ -25,6 +25,13 @@ class TripStore extends ChangeNotifier {
   bool _isInitialized = false;
   Object? _loadError;
 
+  /// Monotonically-increasing token that is incremented each time
+  /// [clearForSignOut] is called.  [_loadTrips] captures the value at the
+  /// start of every load and discards its results if the token has changed by
+  /// the time the async work completes (i.e. a sign-out raced the in-flight
+  /// load).
+  int _sessionToken = 0;
+
   List<TripSummary> get trips => List<TripSummary>.unmodifiable(_trips);
   bool get isLoading => _isLoading;
   bool get isInitialized => _isInitialized;
@@ -424,6 +431,7 @@ class TripStore extends ChangeNotifier {
   }
 
   void resetForTests() {
+    _sessionToken++;
     _trips.clear();
     _membersByTripId.clear();
     NotificationService.instance.resetForTests();
@@ -438,7 +446,12 @@ class TripStore extends ChangeNotifier {
   /// Clears all cached data and cancels the Realtime subscription.
   /// Call this whenever the current user signs out so that the next user
   /// starts with a clean slate and the old Realtime channel is released.
+  ///
+  /// The session token is incremented synchronously before any async work so
+  /// that any in-flight [_loadTrips] call will see the changed token and
+  /// discard its results rather than repopulating the store.
   Future<void> clearForSignOut() async {
+    _sessionToken++;           // synchronous – happens before any await
     await _realtimeService.unsubscribe();
     _trips.clear();
     _membersByTripId.clear();
@@ -461,6 +474,11 @@ class TripStore extends ChangeNotifier {
   }
 
   Future<void> _loadTrips() async {
+    // Capture the session token at the start.  If clearForSignOut() is called
+    // while this load is in-flight, the token will be incremented and we will
+    // discard the stale results rather than repopulating the store.
+    final token = _sessionToken;
+
     _isLoading = true;
     if (!_isInitialized) {
       notifyListeners();
@@ -468,6 +486,10 @@ class TripStore extends ChangeNotifier {
 
     try {
       final loadedTrips = await _tripService.fetchTripsForCurrentUser();
+
+      // If the session changed while we were waiting, discard results.
+      if (_sessionToken != token) return;
+
       _trips
         ..clear()
         ..addAll(loadedTrips);
@@ -477,18 +499,27 @@ class TripStore extends ChangeNotifier {
       for (final trip in _trips) {
         await NotificationService.instance.scheduleTripReminders(trip);
       }
+      // Guard again: reminders scheduling is also async.
+      if (_sessionToken != token) return;
+
       // Subscribe to Realtime for permission/removal changes.
       await _realtimeService.subscribe(
         onPermissionChanged: _onPermissionChanged,
         onRemovedFromTrip: _onRemovedFromTrip,
       );
+
+      // Final guard: drop the notifyListeners() if the session changed.
+      if (_sessionToken != token) return;
     } catch (error) {
+      if (_sessionToken != token) return;
       _loadError = error;
       _isInitialized = true;
     } finally {
-      _isLoading = false;
-      _loadFuture = null;
-      notifyListeners();
+      if (_sessionToken == token) {
+        _isLoading = false;
+        _loadFuture = null;
+        notifyListeners();
+      }
     }
   }
 
