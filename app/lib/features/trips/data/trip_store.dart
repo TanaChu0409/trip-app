@@ -452,6 +452,10 @@ class TripStore extends ChangeNotifier {
 
   @override
   void dispose() {
+    // Flutter's dispose() is synchronous and cannot be made async.
+    // Calling unsubscribe() here starts the async cleanup; the Future is
+    // intentionally not awaited.  The main cleanup path for production code
+    // is clearForSignOut(), which does await the unsubscribe.
     _realtimeService.unsubscribe();
     super.dispose();
   }

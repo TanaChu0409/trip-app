@@ -44,7 +44,11 @@ class AuthStateListenable extends ChangeNotifier {
 
       // When the user signs out (or their session expires), clear all cached
       // trip data and cancel the Realtime subscription so the next user starts
-      // with a clean slate.
+      // with a clean slate.  clearForSignOut() is async but is intentionally
+      // not awaited here: the stream listener cannot be made async, and the
+      // cleanup (subscription teardown + in-memory clear) can safely race
+      // with the router redirecting to the auth screen since the trip data is
+      // no longer needed once the user is unauthenticated.
       if (wasAuthenticated && !isAuthenticated) {
         TripStore.instance.clearForSignOut();
       }
