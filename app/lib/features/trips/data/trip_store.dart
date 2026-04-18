@@ -457,7 +457,7 @@ class TripStore extends ChangeNotifier {
     await _realtimeService.unsubscribe();
     _trips.clear();
     _membersByTripId.clear();
-    NotificationService.instance.resetForTests();
+    NotificationService.instance.clearTrackedReminders();
     _loadFuture = null;
     _isLoading = false;
     _isInitialized = false;
@@ -502,7 +502,7 @@ class TripStore extends ChangeNotifier {
         ..addAll(loadedTrips);
       _loadError = null;
       _isInitialized = true;
-      NotificationService.instance.resetForTests();
+      NotificationService.instance.clearTrackedReminders();
       for (final trip in _trips) {
         await NotificationService.instance.scheduleTripReminders(trip);
       }

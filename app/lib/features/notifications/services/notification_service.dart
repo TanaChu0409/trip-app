@@ -38,9 +38,15 @@ class NotificationService {
     return _tripNotificationIds[tripId]?.length ?? 0;
   }
 
-  void resetForTests() {
+  /// Clears all tracked reminder IDs.  Call this whenever the in-memory
+  /// notification state needs to be reset (e.g. on sign-out or before a
+  /// full reload).
+  void clearTrackedReminders() {
     _tripNotificationIds.clear();
   }
+
+  /// Test-only alias for [clearTrackedReminders].
+  void resetForTests() => clearTrackedReminders();
 
   int _buildNotificationId(String tripId, String suffix) {
     return Object.hash(tripId, suffix) & 0x7fffffff;
