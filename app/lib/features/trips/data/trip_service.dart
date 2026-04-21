@@ -226,11 +226,42 @@ class TripService {
   Future<List<TripMember>> fetchTripMembers(String tripId) async {
     final rows = await _client
         .from('shared_access')
-        .select('id, trip_id, user_id, permission, joined_at, profiles(id, display_name, email, avatar_url)')
+        .select('id, user_id, permission, joined_at')
         .eq('trip_id', tripId);
+
+    if (rows.isEmpty) {
+      return const [];
+    }
+
+    final userIds = {
+      for (final row in rows) (row as Map<String, dynamic>)['user_id'] as String,
+    }.toList(growable: false);
+
+    final profileRows = await _client
+        .from('profiles_public')
+        .select('id, display_name, avatar_url')
+        .inFilter('id', userIds);
+
+    final profileByUserId = <String, Map<String, dynamic>>{
+      for (final row in profileRows)
+        (row['id'] as String): Map<String, dynamic>.from(row as Map),
+    };
+
     return [
       for (final row in rows)
-        TripMember.fromJson(Map<String, dynamic>.from(row as Map)),
+        (() {
+          final json = Map<String, dynamic>.from(row as Map);
+          final profile = profileByUserId[json['user_id'] as String];
+          return TripMember(
+            id: json['id'] as String,
+            userId: json['user_id'] as String,
+            displayName: profile?['display_name'] as String? ?? '未知使用者',
+            email: null,
+            avatarUrl: profile?['avatar_url'] as String?,
+            permission: tripPermissionFromBackend(json['permission'] as String?),
+            joinedAt: DateTime.parse(json['joined_at'] as String),
+          );
+        })(),
     ];
   }
 

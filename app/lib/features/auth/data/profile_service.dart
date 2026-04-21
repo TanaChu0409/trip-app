@@ -15,8 +15,8 @@ class ProfileService {
   Future<List<Profile>> fetchProfiles(List<String> userIds) async {
     if (userIds.isEmpty) return const [];
     final rows = await _client
-        .from('profiles')
-        .select('id, display_name, email, avatar_url')
+        .from('profiles_public')
+        .select('id, display_name, avatar_url')
         .inFilter('id', userIds);
     return [
       for (final row in rows) Profile.fromJson(row),
