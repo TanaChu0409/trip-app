@@ -240,7 +240,7 @@ class TripService {
     final profileRows = await _client
         .from('profiles_public')
         .select('id, display_name, avatar_url')
-        .inFilter('id', userIds);
+        .inFilter('id', userIds.toList(growable: false));
 
     final profileByUserId = <String, Map<String, dynamic>>{
       for (final row in profileRows)

@@ -2,7 +2,7 @@
 -- enumeration of trip share codes.
 --
 -- Without rate limiting, an attacker could send thousands of requests per
--- second to join_trip_by_code and enumerate all valid 6-character share codes.
+-- second to join_trip_by_code and enumerate valid share codes.
 -- This migration adds a tracking table and enforces a maximum of 20 attempts
 -- per authenticated user per hour.
 
@@ -18,8 +18,18 @@ create index if not exists idx_join_code_attempts_user_time
 alter table public.join_code_attempts enable row level security;
 -- No direct client access needed; only the SECURITY DEFINER function writes to it.
 
--- Automatically purge attempts older than 24 hours to keep the table small.
--- (Run as a scheduled job in Supabase, or rely on natural pruning via the index.)
+-- Purge attempts older than 24 hours to keep the table small.
+-- This must be invoked by an explicit scheduled job (for example, Supabase cron);
+-- indexes improve lookup performance but do not remove old rows automatically.
+create or replace function public.purge_join_code_attempts()
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  delete from public.join_code_attempts
+  where attempted_at < now() - interval '24 hours';
+$$;
 
 -- Recreate join_trip_by_code with rate limiting.
 create or replace function public.join_trip_by_code(p_share_code text)

@@ -19,6 +19,7 @@
 drop policy if exists "profiles_read_authenticated" on public.profiles;
 
 -- Full profile (including email) visible to the owner only.
+drop policy if exists "profiles_read_self" on public.profiles;
 create policy "profiles_read_self"
 on public.profiles
 for select
