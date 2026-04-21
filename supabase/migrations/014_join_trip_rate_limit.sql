@@ -44,6 +44,9 @@ begin
       using errcode = '28000';
   end if;
 
+  -- Derive advisory lock keys directly from the authenticated UUID bytes.
+  -- pg_advisory_xact_lock(int, int) accepts two 32-bit integers; we map the
+  -- first 64 bits of the UUID to those two keys for stable per-user locking.
   lock_bytes := uuid_send(current_user_id);
   lock_key_1 :=
       (get_byte(lock_bytes, 0) << 24)
