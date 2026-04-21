@@ -136,3 +136,6 @@ begin
   );
 end;
 $$;
+
+revoke all on function public.join_trip_by_code(text) from public;
+grant execute on function public.join_trip_by_code(text) to authenticated;

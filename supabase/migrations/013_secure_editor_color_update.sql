@@ -32,3 +32,6 @@ begin
   where id = p_trip_id;
 end;
 $$;
+
+revoke all on function public.update_trip_color(uuid, text) from public;
+grant execute on function public.update_trip_color(uuid, text) to authenticated;

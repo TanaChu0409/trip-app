@@ -605,18 +605,18 @@ class _JoinTripSheetState extends State<_JoinTripSheet> {
           children: [
             Text('邀請碼加入', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
-            const Text('輸入 6 碼分享碼後，加入旅程並開始協作（可編輯）。'),
+            const Text('輸入 8 碼分享碼後，加入旅程並開始協作（可編輯）。'),
             const SizedBox(height: 18),
             TextField(
               controller: _codeController,
-              maxLength: 6,
+              maxLength: 8,
               textCapitalization: TextCapitalization.characters,
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]'))
               ],
               decoration: const InputDecoration(
-                labelText: '輸入 6 碼分享碼',
-                hintText: '例如 A1B2C3',
+                labelText: '輸入 8 碼分享碼',
+                hintText: '例如 A1B2C3D4',
               ),
               onSubmitted: (_) => _submit(),
             ),
