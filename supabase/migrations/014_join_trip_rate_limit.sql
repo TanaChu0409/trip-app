@@ -43,7 +43,7 @@ begin
 
   -- Serialize attempts per user so the count-and-insert check is atomic.
   perform pg_advisory_xact_lock(
-    hashtextextended(current_user_id::text, 0)
+    ('x' || substr(md5(current_user_id::text), 1, 16))::bit(64)::bigint
   );
 
   -- Rate limit: at most 20 join attempts per user per hour.
