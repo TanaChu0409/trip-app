@@ -703,7 +703,7 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
           children: [
             Text('邀請成員', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
-            const Text('輸入對方的 Gmail 地址邀請加入行程。'),
+            const Text('輸入對方的 Email 地址邀請加入行程。'),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -712,7 +712,7 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    '提醒：對方須使用 Gmail 帳號登入本應用程式',
+                    '提醒：對方須先登入本應用程式以建立帳號',
                     style: TextStyle(
                         fontSize: 13, color: Colors.orange.shade800),
                   ),
@@ -725,8 +725,8 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
               keyboardType: TextInputType.emailAddress,
               autocorrect: false,
               decoration: const InputDecoration(
-                labelText: '對方的 Gmail',
-                hintText: '例如 someone@gmail.com',
+                labelText: '對方的 Email',
+                hintText: '例如 someone@example.com',
                 prefixIcon: Icon(Icons.email_outlined),
               ),
               onSubmitted: (_) => _submit(),
@@ -771,7 +771,7 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
 
     if (email.isEmpty) {
       messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(const SnackBar(content: Text('請輸入對方的 Gmail')));
+      messenger.showSnackBar(const SnackBar(content: Text('請輸入對方的 Email')));
       return;
     }
     if (!email.contains('@')) {
@@ -793,24 +793,29 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
           messenger.hideCurrentSnackBar();
           messenger
               .showSnackBar(SnackBar(content: Text('已成功邀請 $email 加入行程')));
+          return;
         case InviteMemberStatus.userNotFound:
           messenger.hideCurrentSnackBar();
           messenger.showSnackBar(const SnackBar(
-            content: Text('找不到此 Gmail 帳號，請確認對方已使用 Gmail 登入過本應用程式'),
+            content: Text('找不到此帳號，請確認對方已登入過本應用程式'),
           ));
+          return;
         case InviteMemberStatus.alreadyMember:
           messenger.hideCurrentSnackBar();
           messenger.showSnackBar(
               const SnackBar(content: Text('這位成員已在行程中')));
+          return;
         case InviteMemberStatus.cannotInviteSelf:
           messenger.hideCurrentSnackBar();
           messenger
               .showSnackBar(const SnackBar(content: Text('無法邀請自己')));
+          return;
         case InviteMemberStatus.notOwner:
         case InviteMemberStatus.invalidPermission:
           messenger.hideCurrentSnackBar();
           messenger.showSnackBar(
               const SnackBar(content: Text('邀請失敗，請稍後再試')));
+          return;
       }
     } catch (error) {
       if (!mounted) return;

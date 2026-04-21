@@ -35,8 +35,8 @@ begin
       using errcode = '28000';
   end if;
 
-  -- Validate permission value.
-  if p_permission not in ('editor', 'viewer') then
+  -- Validate permission value (also handles NULL p_permission).
+  if p_permission is null or p_permission not in ('editor', 'viewer') then
     return jsonb_build_object('status', 'invalid_permission');
   end if;
 
@@ -77,9 +77,15 @@ begin
     return jsonb_build_object('status', 'already_member');
   end if;
 
-  -- Insert the membership row.
+  -- Insert the membership row. Use ON CONFLICT to avoid a race where
+  -- another concurrent invite creates the membership after the EXISTS check.
   insert into public.shared_access (trip_id, user_id, permission)
-  values (p_trip_id, invitee_id, p_permission);
+  values (p_trip_id, invitee_id, p_permission)
+  on conflict (trip_id, user_id) do nothing;
+
+  if not found then
+    return jsonb_build_object('status', 'already_member');
+  end if;
 
   return jsonb_build_object(
     'status',     'success',

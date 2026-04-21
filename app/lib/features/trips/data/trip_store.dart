@@ -332,7 +332,7 @@ class TripStore extends ChangeNotifier {
     return trip;
   }
 
-  /// Invite a user to a trip by their Gmail address (owner-only).
+  /// Invite a user to a trip by their email address (owner-only).
   Future<InviteMemberResult> inviteMemberByEmail(
     String tripId,
     String email,
