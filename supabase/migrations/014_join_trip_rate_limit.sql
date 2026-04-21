@@ -33,6 +33,9 @@ as $$
   where attempted_at < now() - interval '24 hours';
 $$;
 
+revoke all on function public.purge_join_code_attempts() from public;
+grant execute on function public.purge_join_code_attempts() to service_role;
+
 -- Recreate join_trip_by_code with rate limiting.
 create or replace function public.join_trip_by_code(p_share_code text)
 returns jsonb
