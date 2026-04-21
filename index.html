@@ -8,6 +8,26 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="桃園嘉義行">
   <meta name="theme-color" content="#003D79">
+  <!-- Security headers (meta-tag equivalents; also set these as HTTP response
+       headers on the hosting server for full protection) -->
+  <!-- Prevent this page from being embedded in iframes (clickjacking defence) -->
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <!-- Disallow MIME-type sniffing -->
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <!-- Send no Referer header when navigating to external links -->
+  <meta name="referrer" content="no-referrer">
+  <!-- Content Security Policy: only allow resources from this origin.
+       'unsafe-inline' is required for the tab-switching script and styles that
+       are already embedded in this file. No external scripts are loaded. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none';
+                 script-src 'unsafe-inline';
+                 style-src 'self' 'unsafe-inline';
+                 font-src 'self';
+                 img-src 'self' data:;
+                 form-action 'none';
+                 base-uri 'self';
+                 frame-ancestors 'none';">
   <title>桃園嘉義行動導覽</title>
   <style>
     :root {
