@@ -35,6 +35,7 @@ declare
   target_owner_id  uuid;
   rows_affected    integer := 0;
   recent_attempts  integer;
+  lock_bytes       bytea;
   lock_key_1       integer;
   lock_key_2       integer;
 begin
@@ -43,8 +44,17 @@ begin
       using errcode = '28000';
   end if;
 
-  lock_key_1 := hashtext(current_user_id::text);
-  lock_key_2 := hashtext(current_user_id::text || ':join_trip_by_code');
+  lock_bytes := uuid_send(current_user_id);
+  lock_key_1 :=
+      (get_byte(lock_bytes, 0) << 24)
+    + (get_byte(lock_bytes, 1) << 16)
+    + (get_byte(lock_bytes, 2) << 8)
+    + get_byte(lock_bytes, 3);
+  lock_key_2 :=
+      (get_byte(lock_bytes, 4) << 24)
+    + (get_byte(lock_bytes, 5) << 16)
+    + (get_byte(lock_bytes, 6) << 8)
+    + get_byte(lock_bytes, 7);
 
   -- Serialize attempts per user so the count-and-insert check is atomic.
   perform pg_advisory_xact_lock(lock_key_1, lock_key_2);
