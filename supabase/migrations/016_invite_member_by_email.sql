@@ -104,12 +104,13 @@ begin
     and attempted_at > now() - interval '1 hour';
 
   if recent_attempts >= 20 then
-    raise exception 'Too many invite attempts. Please wait before trying again.'
+    raise exception 'Too many invite attempts. Please wait up to an hour before trying again.'
       using errcode = '53400';
   end if;
 
   if normalised = '' then
-    return jsonb_build_object('status', 'user_not_found');
+    raise exception 'Email address is required.'
+      using errcode = '22023';
   end if;
 
   insert into public.invite_member_attempts (user_id) values (caller_id);
