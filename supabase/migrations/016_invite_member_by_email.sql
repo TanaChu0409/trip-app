@@ -83,7 +83,7 @@ begin
   end if;
 
   if normalised = '' then
-    raise exception 'Email address cannot be empty.'
+    raise exception 'Email address cannot be empty or contain only whitespace.'
       using errcode = '22023';
   end if;
 

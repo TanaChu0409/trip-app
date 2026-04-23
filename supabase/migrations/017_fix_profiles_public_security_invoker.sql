@@ -57,6 +57,7 @@ $$;
 
 revoke all on function public.can_read_trip_peer_profile(uuid, uuid) from public;
 grant execute on function public.can_read_trip_peer_profile(uuid, uuid) to authenticated;
+grant execute on function public.can_read_trip_peer_profile(uuid, uuid) to service_role;
 
 drop policy if exists "profiles_read_trip_peer" on public.profiles;
 create policy "profiles_read_trip_peer"
