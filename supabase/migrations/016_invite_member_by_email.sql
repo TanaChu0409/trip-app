@@ -104,6 +104,7 @@ begin
     and attempted_at > now() - interval '1 hour';
 
   if recent_attempts >= 20 then
+    -- Match join_trip_by_code's retry-later rate-limit signal.
     raise exception 'Too many invite attempts. Please wait an hour before trying again.'
       using errcode = '53400';
   end if;
