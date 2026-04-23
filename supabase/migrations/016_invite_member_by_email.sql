@@ -97,7 +97,8 @@ begin
 
   perform pg_advisory_xact_lock(lock_key_1, lock_key_2);
 
-  -- Rate limit: at most 20 invite attempts per owner per hour before querying auth.users.
+  -- Rate limit: at most 20 invite attempts per owner per hour before querying auth.users,
+  -- after confirming the caller owns the target trip.
   select count(*) into recent_attempts
   from public.invite_member_attempts
   where user_id = caller_id
@@ -110,7 +111,7 @@ begin
   end if;
 
   if normalised = '' then
-    raise exception 'A valid email address is required.'
+    raise exception 'Email address cannot be empty.'
       using errcode = '22023';
   end if;
 
