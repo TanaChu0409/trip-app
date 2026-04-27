@@ -33,6 +33,34 @@ as $$
   );
 $$;
 
+create or replace function public.can_edit_stop(p_stop_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.stops
+    join public.days on days.id = stops.day_id
+    where stops.id = p_stop_id
+      and public.is_trip_editor(days.trip_id)
+  );
+$$;
+
+create or replace function public.storage_stop_id(p_name text)
+returns uuid
+language sql
+immutable
+as $$
+  select case
+    when split_part(p_name, '/', 3) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      then split_part(p_name, '/', 3)::uuid
+    else null
+  end
+$$;
+
 -- Helper to check if the current user can read a stop
 -- (owner OR any shared_access member).
 create or replace function public.can_read_stop(p_stop_id uuid)
@@ -130,17 +158,23 @@ using (
 -- Note: If this bucket already exists the INSERT is safely ignored.
 
 insert into storage.buckets (id, name, public)
-values ('stop-photos', 'stop-photos', true)
+values ('stop-photos', 'stop-photos', false)
 on conflict (id) do nothing;
+
+update storage.buckets
+set public = false
+where id = 'stop-photos';
 
 -- ── Storage policies ───────────────────────────────────────────────────────
 
--- Public read (bucket is public, but explicit policy for belt-and-suspenders)
 drop policy if exists "stop_photos_storage_read" on storage.objects;
 create policy "stop_photos_storage_read"
 on storage.objects
 for select
-using (bucket_id = 'stop-photos');
+using (
+  bucket_id = 'stop-photos'
+  and public.can_read_stop(public.storage_stop_id(name))
+);
 
 -- Authenticated users may upload to stop-photos bucket
 drop policy if exists "stop_photos_storage_insert" on storage.objects;
@@ -150,6 +184,9 @@ for insert
 with check (
   bucket_id = 'stop-photos'
   and auth.role() = 'authenticated'
+  and owner = auth.uid()
+  and split_part(name, '/', 1) = auth.uid()::text
+  and public.can_edit_stop(public.storage_stop_id(name))
 );
 
 -- Authenticated users may delete their own uploads
@@ -159,5 +196,5 @@ on storage.objects
 for delete
 using (
   bucket_id = 'stop-photos'
-  and auth.role() = 'authenticated'
+  and public.can_edit_stop(public.storage_stop_id(name))
 );

@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:trip_planner_app/features/notifications/services/notification_service.dart';
 import 'package:trip_planner_app/features/trip_detail/data/parking_spot_service.dart';
-import 'package:trip_planner_app/features/trip_detail/data/stop_photo_service.dart';
 import 'package:trip_planner_app/features/trip_detail/data/stop_service.dart';
 import 'package:trip_planner_app/features/trips/data/invite_member_result.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_member.dart';

@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:trip_planner_app/core/supabase/supabase_error_formatter.dart';
 import 'package:trip_planner_app/core/theme/app_theme.dart';
 import 'package:trip_planner_app/core/ui/app_scaffold_messenger.dart';
@@ -497,23 +496,26 @@ class _StopFormScreenState extends State<StopFormScreen> {
 
       final savedStopId = savedStop.id;
       if (savedStopId != null) {
-        // Run deletions and uploads concurrently.
-        final userId =
-            Supabase.instance.client.auth.currentUser?.id ?? '';
-
         await Future.wait([
           for (final photo in _photosToDelete)
             _photoService.deletePhoto(photo),
         ]);
 
+        final nextSortOrder = _existingPhotos.fold<int>(
+          -1,
+          (highest, photo) => photo.sortOrder > highest ? photo.sortOrder : highest,
+        );
         final uploadedPhotos = await Future.wait([
-          for (final pending in _pendingPhotos)
-            _photoService.compressAndUpload(
-              stopId: savedStopId,
-              tripId: widget.tripId,
-              userId: userId,
-              bytes: pending.bytes,
-            ),
+          for (var index = 0; index < _pendingPhotos.length; index += 1)
+            () {
+              final pending = _pendingPhotos[index];
+              return _photoService.compressAndUpload(
+                stopId: savedStopId,
+                tripId: widget.tripId,
+                sortOrder: nextSortOrder + index + 1,
+                bytes: pending.bytes,
+              );
+            }(),
         ]);
 
         final finalPhotos = [..._existingPhotos, ...uploadedPhotos];

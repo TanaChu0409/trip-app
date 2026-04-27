@@ -9,6 +9,9 @@ class SupabaseErrorFormatter {
       if (message.contains('Missing required environment variable')) {
         return '缺少 Supabase 設定。請用 --dart-define 或 --dart-define-from-file 提供 SUPABASE_URL 與 SUPABASE_ANON_KEY。';
       }
+      if (message.contains('不支援的圖片格式')) {
+        return message;
+      }
     }
 
     if (error is AuthException) {

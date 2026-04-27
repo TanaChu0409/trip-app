@@ -250,12 +250,13 @@ class TripService {
         stopRows.map((row) => row['id'] as String).toList(growable: false);
 
     // Fetch parking spots and photos in parallel.
+    final photoService = StopPhotoService.instance;
     final results = await Future.wait([
       _fetchParkingSpots(stopIds),
-      _fetchPhotos(stopIds),
+      photoService.fetchPhotoMapForStops(stopIds),
     ]);
-    final parkingRows = results[0];
-    final photoRows = results[1];
+    final parkingRows = results[0] as List<Map<String, dynamic>>;
+    final photosByStopId = results[1] as Map<String, List<StopPhoto>>;
 
     final parkingByStopId = <String, List<ParkingSpot>>{};
     for (final row in parkingRows) {
@@ -263,19 +264,6 @@ class TripService {
       parkingByStopId
           .putIfAbsent(stopId, () => [])
           .add(ParkingSpot.fromJson(row));
-    }
-
-    final photoService = StopPhotoService.instance;
-    final photosByStopId = <String, List<StopPhoto>>{};
-    for (final row in photoRows) {
-      final stopId = row['stop_id'] as String;
-      final storagePath = row['storage_path'] as String? ?? '';
-      photosByStopId.putIfAbsent(stopId, () => []).add(
-            StopPhoto.fromJson(
-              row,
-              publicUrl: photoService.getPublicUrl(storagePath),
-            ),
-          );
     }
 
     final stopsByDayId = <String, List<StopItem>>{};
@@ -395,20 +383,6 @@ class TripService {
     final rows = await _client
         .from('parking_spots')
         .select('id, stop_id, name, map_url, sort_order')
-        .inFilter('stop_id', stopIds)
-        .order('sort_order');
-    return rows
-        .map((row) => Map<String, dynamic>.from(row))
-        .toList(growable: false);
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchPhotos(
-      List<String> stopIds) async {
-    if (stopIds.isEmpty) return const [];
-
-    final rows = await _client
-        .from('stop_photos')
-        .select('id, stop_id, storage_path, sort_order')
         .inFilter('stop_id', stopIds)
         .order('sort_order');
     return rows

@@ -22,9 +22,10 @@ class StopPhotoService {
   Future<StopPhoto> compressAndUpload({
     required String stopId,
     required String tripId,
-    required String userId,
+    required int sortOrder,
     required Uint8List bytes,
   }) async {
+    final userId = _requireUserId();
     final compressed = await compressImageToJpeg(bytes);
 
     final filename = '${const Uuid().v4()}.jpg';
@@ -39,23 +40,24 @@ class StopPhotoService {
           ),
         );
 
-    final publicUrl =
-        _client.storage.from(_bucket).getPublicUrl(storagePath);
+    try {
+      final row = await _client
+          .from('stop_photos')
+          .insert({
+            'stop_id': stopId,
+            'storage_path': storagePath,
+            'sort_order': sortOrder,
+          })
+          .select()
+          .single();
 
-    final row = await _client
-        .from('stop_photos')
-        .insert({
-          'stop_id': stopId,
-          'storage_path': storagePath,
-          'sort_order': 0,
-        })
-        .select()
-        .single();
-
-    return StopPhoto.fromJson(
-      Map<String, dynamic>.from(row),
-      publicUrl: publicUrl,
-    );
+      return buildPhotoFromRow(Map<String, dynamic>.from(row));
+    } catch (_) {
+      try {
+        await _client.storage.from(_bucket).remove([storagePath]);
+      } catch (_) {}
+      rethrow;
+    }
   }
 
   /// Delete [photo] from both storage and the database.
@@ -87,9 +89,35 @@ class StopPhotoService {
         .toList(growable: false);
   }
 
-  /// Build the public URL for a given [storagePath].
-  String getPublicUrl(String storagePath) {
-    return _client.storage.from(_bucket).getPublicUrl(storagePath);
+  Future<Map<String, List<StopPhoto>>> fetchPhotoMapForStops(
+      List<String> stopIds) async {
+    final rows = await fetchPhotosForStops(stopIds);
+    if (rows.isEmpty) {
+      return const {};
+    }
+
+    final photos = await Future.wait(rows.map(buildPhotoFromRow));
+    final photosByStopId = <String, List<StopPhoto>>{};
+    for (var index = 0; index < rows.length; index += 1) {
+      final stopId = rows[index]['stop_id'] as String;
+      photosByStopId.putIfAbsent(stopId, () => []).add(photos[index]);
+    }
+    return photosByStopId;
+  }
+
+  Future<StopPhoto> buildPhotoFromRow(Map<String, dynamic> row) async {
+    final storagePath = row['storage_path'] as String? ?? '';
+    final signedUrl = await _client.storage
+        .from(_bucket)
+        .createSignedUrl(storagePath, 60 * 60);
+    return StopPhoto.fromJson(row, publicUrl: signedUrl);
+  }
+
+  String _requireUserId() {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) {
+      throw AuthException('登入狀態已失效，請重新登入後再試。');
+    }
+    return userId;
   }
 }
-
