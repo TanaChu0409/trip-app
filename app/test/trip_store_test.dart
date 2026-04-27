@@ -134,7 +134,7 @@ void main() {
       expect(trip.canEdit, isFalse);
     });
 
-    test('guest with null permission defaults to editor (canEdit true)', () {
+    test('guest with null permission cannot edit', () {
       const trip = TripSummary(
         id: 't',
         title: 't',
@@ -142,8 +142,44 @@ void main() {
         role: TripRole.guest,
         days: [],
       );
-      // null permission → tripPermissionFromBackend default is editor
-      expect(trip.canEdit, isFalse); // null != TripPermission.editor
+      expect(trip.canEdit, isFalse);
+    });
+  });
+
+  group('TripSummary.isReadOnly', () {
+    test('owner is not read-only', () {
+      const trip = TripSummary(
+        id: 't',
+        title: 't',
+        dateRange: '2026/01/01 - 2026/01/02',
+        role: TripRole.owner,
+        days: [],
+      );
+      expect(trip.isReadOnly, isFalse);
+    });
+
+    test('guest editor is not read-only', () {
+      const trip = TripSummary(
+        id: 't',
+        title: 't',
+        dateRange: '2026/01/01 - 2026/01/02',
+        role: TripRole.guest,
+        days: [],
+        permission: TripPermission.editor,
+      );
+      expect(trip.isReadOnly, isFalse);
+    });
+
+    test('guest viewer is read-only', () {
+      const trip = TripSummary(
+        id: 't',
+        title: 't',
+        dateRange: '2026/01/01 - 2026/01/02',
+        role: TripRole.guest,
+        days: [],
+        permission: TripPermission.viewer,
+      );
+      expect(trip.isReadOnly, isTrue);
     });
   });
 }

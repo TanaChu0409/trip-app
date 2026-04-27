@@ -87,7 +87,7 @@ class _StopFormScreenState extends State<StopFormScreen> {
       );
     }
 
-    final isReadOnly = trip.role == TripRole.guest;
+    final isReadOnly = trip.isReadOnly;
     if (isReadOnly) {
       return Scaffold(
         appBar: AppBar(title: const Text('唯讀旅程')),

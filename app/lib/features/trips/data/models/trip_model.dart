@@ -206,6 +206,9 @@ class TripSummary {
   bool get canEdit =>
       role == TripRole.owner || permission == TripPermission.editor;
 
+  /// Whether the current user should be blocked from editing this trip.
+  bool get isReadOnly => !canEdit;
+
   TripSummary copyWith({
     String? id,
     String? title,

@@ -121,7 +121,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
       return const Scaffold(body: Center(child: Text('找不到旅程')));
     }
 
-    final isReadOnly = !trip.canEdit;
+    final isReadOnly = trip.isReadOnly;
     final tripColor = colorFromHex(trip.color);
     final tripColorSoft = tintColor(tripColor, amount: 0.84);
 
