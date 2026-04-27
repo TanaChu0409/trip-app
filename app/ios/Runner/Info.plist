@@ -78,5 +78,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>需要存取相片庫以上傳地點照片。</string>
+	<key>NSCameraUsageDescription</key>
+	<string>需要使用相機以拍攝地點照片。</string>
 </dict>
 </plist>

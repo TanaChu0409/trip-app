@@ -13,6 +13,44 @@ TripPermission tripPermissionFromBackend(String? value) {
   }
 }
 
+class StopPhoto {
+  const StopPhoto({
+    this.id,
+    required this.storagePath,
+    required this.url,
+    this.sortOrder = 0,
+  });
+
+  final String? id;
+  final String storagePath;
+  final String url;
+  final int sortOrder;
+
+  StopPhoto copyWith({
+    String? id,
+    String? storagePath,
+    String? url,
+    int? sortOrder,
+  }) {
+    return StopPhoto(
+      id: id ?? this.id,
+      storagePath: storagePath ?? this.storagePath,
+      url: url ?? this.url,
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+
+  factory StopPhoto.fromJson(Map<String, dynamic> json, {required String publicUrl}) {
+    return StopPhoto(
+      id: json['id'] as String?,
+      storagePath: json['storage_path'] as String? ?? '',
+      url: publicUrl,
+      sortOrder: json['sort_order'] as int? ?? 0,
+    );
+  }
+}
+
+
 class ParkingSpot {
   const ParkingSpot({
     this.id,
@@ -71,6 +109,7 @@ class StopItem {
     this.color,
     this.isHighlight = false,
     this.parkingSpots = const [],
+    this.photos = const [],
     this.sortOrder = 0,
   });
 
@@ -84,6 +123,7 @@ class StopItem {
   final String? color;
   final bool isHighlight;
   final List<ParkingSpot> parkingSpots;
+  final List<StopPhoto> photos;
   final int sortOrder;
 
   StopItem copyWith({
@@ -96,6 +136,7 @@ class StopItem {
     String? color,
     bool? isHighlight,
     List<ParkingSpot>? parkingSpots,
+    List<StopPhoto>? photos,
     int? sortOrder,
   }) {
     return StopItem(
@@ -108,6 +149,7 @@ class StopItem {
       color: color ?? this.color,
       isHighlight: isHighlight ?? this.isHighlight,
       parkingSpots: parkingSpots ?? this.parkingSpots,
+      photos: photos ?? this.photos,
       sortOrder: sortOrder ?? this.sortOrder,
     );
   }
@@ -129,6 +171,7 @@ class StopItem {
   factory StopItem.fromJson(
     Map<String, dynamic> json, {
     List<ParkingSpot> parkingSpots = const [],
+    List<StopPhoto> photos = const [],
   }) {
     return StopItem(
       id: json['id'] as String?,
@@ -140,6 +183,7 @@ class StopItem {
       color: json['color'] as String?,
       isHighlight: json['is_highlight'] as bool? ?? false,
       parkingSpots: parkingSpots,
+      photos: photos,
       sortOrder: json['sort_order'] as int? ?? 0,
     );
   }

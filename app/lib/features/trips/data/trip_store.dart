@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:trip_planner_app/features/notifications/services/notification_service.dart';
 import 'package:trip_planner_app/features/trip_detail/data/parking_spot_service.dart';
+import 'package:trip_planner_app/features/trip_detail/data/stop_photo_service.dart';
 import 'package:trip_planner_app/features/trip_detail/data/stop_service.dart';
 import 'package:trip_planner_app/features/trips/data/invite_member_result.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_member.dart';
@@ -245,6 +246,35 @@ class TripStore extends ChangeNotifier {
     await _refreshTripReminders(updatedTrip);
     notifyListeners();
     return true;
+  }
+
+  /// Update the in-memory photo list for a stop after uploads/deletions.
+  /// Does NOT touch the database — photo persistence is handled by
+  /// [StopPhotoService] before this is called.
+  void updateStopPhotos({
+    required String tripId,
+    required String dayId,
+    required String stopId,
+    required List<StopPhoto> photos,
+  }) {
+    final location = _findEditableDayLocation(tripId, dayId);
+    if (location == null) return;
+
+    final stopIndex =
+        location.day.stops.indexWhere((item) => item.id == stopId);
+    if (stopIndex == -1) return;
+
+    final updatedStop =
+        location.day.stops[stopIndex].copyWith(photos: photos);
+    final updatedTrip = _replaceDayAt(
+      location.trip,
+      location.dayIndex,
+      location.day.copyWith(
+        stops: [...location.day.stops]..[stopIndex] = updatedStop,
+      ),
+    );
+    _trips[location.tripIndex] = updatedTrip;
+    notifyListeners();
   }
 
   Future<ParkingSpot> addParkingSpot({

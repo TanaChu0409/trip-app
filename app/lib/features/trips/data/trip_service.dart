@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:trip_planner_app/features/trips/data/invite_member_result.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_member.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
+import 'package:trip_planner_app/features/trip_detail/data/stop_photo_service.dart';
 
 class TripService {
   TripService._();
@@ -247,7 +248,14 @@ class TripService {
     final stopRows = await _fetchStops(dayIds);
     final stopIds =
         stopRows.map((row) => row['id'] as String).toList(growable: false);
-    final parkingRows = await _fetchParkingSpots(stopIds);
+
+    // Fetch parking spots and photos in parallel.
+    final results = await Future.wait([
+      _fetchParkingSpots(stopIds),
+      _fetchPhotos(stopIds),
+    ]);
+    final parkingRows = results[0];
+    final photoRows = results[1];
 
     final parkingByStopId = <String, List<ParkingSpot>>{};
     for (final row in parkingRows) {
@@ -255,6 +263,19 @@ class TripService {
       parkingByStopId
           .putIfAbsent(stopId, () => [])
           .add(ParkingSpot.fromJson(row));
+    }
+
+    final photoService = StopPhotoService.instance;
+    final photosByStopId = <String, List<StopPhoto>>{};
+    for (final row in photoRows) {
+      final stopId = row['stop_id'] as String;
+      final storagePath = row['storage_path'] as String? ?? '';
+      photosByStopId.putIfAbsent(stopId, () => []).add(
+            StopPhoto.fromJson(
+              row,
+              publicUrl: photoService.getPublicUrl(storagePath),
+            ),
+          );
     }
 
     final stopsByDayId = <String, List<StopItem>>{};
@@ -265,6 +286,7 @@ class TripService {
             StopItem.fromJson(
               row,
               parkingSpots: parkingByStopId[stopId] ?? const [],
+              photos: photosByStopId[stopId] ?? const [],
             ),
           );
     }
@@ -373,6 +395,20 @@ class TripService {
     final rows = await _client
         .from('parking_spots')
         .select('id, stop_id, name, map_url, sort_order')
+        .inFilter('stop_id', stopIds)
+        .order('sort_order');
+    return rows
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchPhotos(
+      List<String> stopIds) async {
+    if (stopIds.isEmpty) return const [];
+
+    final rows = await _client
+        .from('stop_photos')
+        .select('id, stop_id, storage_path, sort_order')
         .inFilter('stop_id', stopIds)
         .order('sort_order');
     return rows
