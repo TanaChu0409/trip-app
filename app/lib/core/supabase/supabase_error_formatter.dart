@@ -11,6 +11,13 @@ class SupabaseErrorFormatter {
       }
     }
 
+    if (error is ArgumentError) {
+      final message = error.message?.toString() ?? '';
+      if (message.contains('不支援的圖片格式')) {
+        return message;
+      }
+    }
+
     if (error is AuthException) {
       return error.message;
     }

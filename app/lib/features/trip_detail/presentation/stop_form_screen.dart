@@ -1,8 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:trip_planner_app/core/supabase/supabase_error_formatter.dart';
 import 'package:trip_planner_app/core/theme/app_theme.dart';
 import 'package:trip_planner_app/core/ui/app_scaffold_messenger.dart';
+import 'package:trip_planner_app/features/trip_detail/data/stop_photo_service.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 import 'package:trip_planner_app/features/trips/data/trip_store.dart';
 import 'package:trip_planner_app/features/trips/presentation/widgets/trip_color_picker.dart';
@@ -32,11 +36,23 @@ class _StopFormScreenState extends State<StopFormScreen> {
   final _mapUrlController = TextEditingController();
   final List<_ParkingSpotDraft> _parkingSpots = [];
   final TripStore _tripStore = TripStore.instance;
+  final StopPhotoService _photoService = StopPhotoService.instance;
+  final ImagePicker _imagePicker = ImagePicker();
 
   String? _selectedColor;
   bool _isHighlight = false;
   bool _isSaving = false;
   bool _initialized = false;
+
+  // Photos already stored in Supabase (from the existing stop).
+  final List<StopPhoto> _existingPhotos = [];
+  // Photos picked from the gallery but not yet uploaded.
+  final List<_PendingPhoto> _pendingPhotos = [];
+  // Existing photos queued for deletion on save.
+  final List<StopPhoto> _photosToDelete = [];
+
+  int get _totalPhotoCount =>
+      _existingPhotos.length + _pendingPhotos.length;
 
   bool get _isEditMode => widget.stopId != null;
 
@@ -220,6 +236,57 @@ class _StopFormScreenState extends State<StopFormScreen> {
                 const SizedBox(height: 16),
                 _buildSectionCard(
                   context,
+                  title: '地點照片',
+                  action: _totalPhotoCount < StopPhotoService.maxPhotos
+                      ? OutlinedButton.icon(
+                          onPressed: _isSaving ? null : _pickPhoto,
+                          icon: const Icon(Icons.add_photo_alternate_outlined),
+                          label: const Text('新增照片'),
+                        )
+                      : null,
+                  children: [
+                    Text(
+                      '最多 ${StopPhotoService.maxPhotos} 張，照片上傳後自動壓縮。',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: AppColors.muted),
+                    ),
+                    if (_totalPhotoCount > 0) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 90,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          children: [
+                            for (final photo in _existingPhotos)
+                              _PhotoThumbnail(
+                                key: ValueKey('existing-${photo.id}'),
+                                imageProvider: NetworkImage(photo.url),
+                                onDelete: _isSaving
+                                    ? null
+                                    : () => _removeExistingPhoto(photo),
+                              ),
+                            for (var i = 0;
+                                i < _pendingPhotos.length;
+                                i++)
+                              _PhotoThumbnail(
+                                key: ValueKey('pending-$i'),
+                                imageProvider: MemoryImage(
+                                    _pendingPhotos[i].bytes),
+                                onDelete: _isSaving
+                                    ? null
+                                    : () => _removePendingPhoto(i),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  context,
                   title: '鄰近停車場',
                   action: OutlinedButton.icon(
                     onPressed: _isSaving ? null : _addParkingSpot,
@@ -288,6 +355,7 @@ class _StopFormScreenState extends State<StopFormScreen> {
       for (final parkingSpot in stop.parkingSpots) {
         _parkingSpots.add(_ParkingSpotDraft.fromParkingSpot(parkingSpot));
       }
+      _existingPhotos.addAll(stop.photos);
     }
 
     _initialized = true;
@@ -354,6 +422,36 @@ class _StopFormScreenState extends State<StopFormScreen> {
     });
   }
 
+  Future<void> _pickPhoto() async {
+    if (_totalPhotoCount >= StopPhotoService.maxPhotos) return;
+
+    final picked = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      // Do not apply additional lossy pre-compression via picker —
+      // our StopPhotoService handles compression.
+      imageQuality: 100,
+    );
+    if (picked == null || !mounted) return;
+
+    final bytes = await picked.readAsBytes();
+    setState(() {
+      _pendingPhotos.add(_PendingPhoto(bytes: bytes));
+    });
+  }
+
+  void _removeExistingPhoto(StopPhoto photo) {
+    setState(() {
+      _existingPhotos.remove(photo);
+      _photosToDelete.add(photo);
+    });
+  }
+
+  void _removePendingPhoto(int index) {
+    setState(() {
+      _pendingPhotos.removeAt(index);
+    });
+  }
+
   Future<void> _submit() async {
     final formState = _formKey.currentState;
     if (formState == null || !formState.validate()) {
@@ -381,17 +479,53 @@ class _StopFormScreenState extends State<StopFormScreen> {
         sortOrder: _currentStop?.sortOrder ?? 0,
       );
 
+      StopItem savedStop;
       if (_isEditMode) {
-        await _tripStore.updateStop(
+        savedStop = await _tripStore.updateStop(
           tripId: widget.tripId,
           dayId: widget.dayId,
           stop: stop,
         );
       } else {
-        await _tripStore.addStop(
+        savedStop = await _tripStore.addStop(
           tripId: widget.tripId,
           dayId: widget.dayId,
           stop: stop,
+        );
+      }
+
+      final savedStopId = savedStop.id;
+      if (savedStopId != null) {
+        await Future.wait([
+          for (final photo in _photosToDelete)
+            _photoService.deletePhoto(photo),
+        ]);
+
+        final nextSortOrderBase = _existingPhotos.isEmpty
+            ? 0
+            : _existingPhotos
+                    .map((photo) => photo.sortOrder)
+                    .reduce((left, right) => left > right ? left : right) +
+                1;
+        final uploadedPhotos = await Future.wait([
+          for (var index = 0; index < _pendingPhotos.length; index += 1)
+            () {
+              final pending = _pendingPhotos[index];
+              return _photoService.compressAndUpload(
+                stopId: savedStopId,
+                tripId: widget.tripId,
+                sortOrder: nextSortOrderBase + index,
+                bytes: pending.bytes,
+              );
+            }(),
+        ]);
+
+        final finalPhotos = [..._existingPhotos, ...uploadedPhotos];
+        _tripStore.updateStopPhotos(
+          tripId: widget.tripId,
+          dayId: widget.dayId,
+          stopId: savedStopId,
+          photos: finalPhotos,
         );
       }
 
@@ -583,5 +717,63 @@ class _ParkingSpotDraft {
   void dispose() {
     nameController.dispose();
     mapUrlController.dispose();
+  }
+}
+
+/// Holds the raw bytes of a photo that has been picked but not yet uploaded.
+class _PendingPhoto {
+  const _PendingPhoto({required this.bytes});
+  final Uint8List bytes;
+}
+
+/// A 90×90 rounded thumbnail with a delete overlay.
+class _PhotoThumbnail extends StatelessWidget {
+  const _PhotoThumbnail({
+    super.key,
+    required this.imageProvider,
+    this.onDelete,
+  });
+
+  final ImageProvider imageProvider;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image(
+              image: imageProvider,
+              width: 90,
+              height: 90,
+              fit: BoxFit.cover,
+            ),
+          ),
+          if (onDelete != null)
+            Positioned(
+              top: 2,
+              right: 2,
+              child: GestureDetector(
+                onTap: onDelete,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.all(2),
+                  child: const Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

@@ -108,6 +108,42 @@ class StopCard extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(stop.note!),
                     ],
+                    // ── Photo strip ─────────────────────────────────────────
+                    if (stop.photos.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 80,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: stop.photos.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(width: 6),
+                          itemBuilder: (context, index) {
+                            final photo = stop.photos[index];
+                            return GestureDetector(
+                              onTap: () => _showPhotoPreview(
+                                  context, stop.photos, index),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.network(
+                                  photo.url,
+                                  width: 80,
+                                  height: 80,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    width: 80,
+                                    height: 80,
+                                    color: Colors.grey.shade200,
+                                    child: const Icon(Icons.broken_image,
+                                        color: Colors.grey),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                     if (stop.mapUrl != null) ...[
                       const SizedBox(height: 12),
                       FilledButton.tonalIcon(
@@ -178,4 +214,129 @@ class StopCard extends StatelessWidget {
       throw Exception('Could not launch $url');
     }
   }
+
+  void _showPhotoPreview(
+      BuildContext context, List<StopPhoto> photos, int initialIndex) {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (_) => _PhotoPreviewDialog(
+        photos: photos,
+        initialIndex: initialIndex,
+      ),
+    );
+  }
 }
+
+// ── Photo preview dialog ───────────────────────────────────────────────────
+
+class _PhotoPreviewDialog extends StatefulWidget {
+  const _PhotoPreviewDialog({
+    required this.photos,
+    required this.initialIndex,
+  });
+
+  final List<StopPhoto> photos;
+  final int initialIndex;
+
+  @override
+  State<_PhotoPreviewDialog> createState() => _PhotoPreviewDialogState();
+}
+
+class _PhotoPreviewDialogState extends State<_PhotoPreviewDialog> {
+  late final PageController _pageController;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog.fullscreen(
+      backgroundColor: Colors.transparent,
+      child: Stack(
+        children: [
+          // Photo pager
+          PageView.builder(
+            controller: _pageController,
+            itemCount: widget.photos.length,
+            onPageChanged: (index) =>
+                setState(() => _currentIndex = index),
+            itemBuilder: (context, index) {
+              return InteractiveViewer(
+                maxScale: 4.0,
+                child: Center(
+                  child: Image.network(
+                    widget.photos[index].url,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (_, child, progress) {
+                      if (progress == null) return child;
+                      return const Center(
+                        child: CircularProgressIndicator(
+                            color: Colors.white),
+                      );
+                    },
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.broken_image,
+                      color: Colors.white54,
+                      size: 64,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          // Close button
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            right: 12,
+            child: IconButton(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.close_rounded,
+                  color: Colors.white, size: 28),
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.black38,
+              ),
+            ),
+          ),
+          // Page indicator
+          if (widget.photos.length > 1)
+            Positioned(
+              bottom: MediaQuery.of(context).padding.bottom + 24,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var i = 0; i < widget.photos.length; i++)
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      width: i == _currentIndex ? 16 : 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: i == _currentIndex
+                            ? Colors.white
+                            : Colors.white38,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
