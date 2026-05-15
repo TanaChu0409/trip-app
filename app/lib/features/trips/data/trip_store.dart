@@ -586,7 +586,10 @@ class TripStore extends ChangeNotifier {
       next: stop.parkingSpots,
     );
     return createdStop.copyWith(
-        parkingSpots: parkingSpots, sortOrder: stop.sortOrder);
+      parkingSpots: parkingSpots,
+      photos: stop.photos,
+      sortOrder: stop.sortOrder,
+    );
   }
 
   Future<StopItem> _updateStopWithParking({
@@ -605,7 +608,10 @@ class TripStore extends ChangeNotifier {
       next: next.parkingSpots,
     );
     return updatedStop.copyWith(
-        parkingSpots: parkingSpots, sortOrder: next.sortOrder);
+      parkingSpots: parkingSpots,
+      photos: next.photos,
+      sortOrder: next.sortOrder,
+    );
   }
 
   Future<List<ParkingSpot>> _syncParkingSpots({

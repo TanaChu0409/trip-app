@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:trip_planner_app/core/theme/app_theme.dart';
+import 'package:trip_planner_app/features/trip_detail/presentation/widgets/stop_photo_image.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 
 class StopCard extends StatelessWidget {
@@ -125,12 +126,23 @@ class StopCard extends StatelessWidget {
                                   context, stop.photos, index),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(10),
-                                child: Image.network(
-                                  photo.url,
-                                  width: 80,
-                                  height: 80,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
+                                child: StopPhotoImage(
+                                  photo: photo,
+                                  imageBuilder: (context, imageUrl) =>
+                                      Image.network(
+                                    imageUrl,
+                                    width: 80,
+                                    height: 80,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      width: 80,
+                                      height: 80,
+                                      color: Colors.grey.shade200,
+                                      child: const Icon(Icons.broken_image,
+                                          color: Colors.grey),
+                                    ),
+                                  ),
+                                  errorBuilder: (context, _) => Container(
                                     width: 80,
                                     height: 80,
                                     color: Colors.grey.shade200,
@@ -276,17 +288,27 @@ class _PhotoPreviewDialogState extends State<_PhotoPreviewDialog> {
               return InteractiveViewer(
                 maxScale: 4.0,
                 child: Center(
-                  child: Image.network(
-                    widget.photos[index].url,
-                    fit: BoxFit.contain,
-                    loadingBuilder: (_, child, progress) {
-                      if (progress == null) return child;
-                      return const Center(
-                        child: CircularProgressIndicator(
-                            color: Colors.white),
-                      );
-                    },
-                    errorBuilder: (_, __, ___) => const Icon(
+                  child: StopPhotoImage(
+                    photo: widget.photos[index],
+                    imageBuilder: (context, imageUrl) => Image.network(
+                      imageUrl,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (_, child, progress) {
+                        if (progress == null) return child;
+                        return const Center(
+                          child: CircularProgressIndicator(color: Colors.white),
+                        );
+                      },
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.broken_image,
+                        color: Colors.white54,
+                        size: 64,
+                      ),
+                    ),
+                    loadingBuilder: (context) => const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
+                    errorBuilder: (context, _) => const Icon(
                       Icons.broken_image,
                       color: Colors.white54,
                       size: 64,

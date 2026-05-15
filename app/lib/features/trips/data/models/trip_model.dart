@@ -18,33 +18,61 @@ class StopPhoto {
     this.id,
     required this.storagePath,
     required this.url,
+    this.signedUrlExpiresAt,
     this.sortOrder = 0,
   });
 
   final String? id;
   final String storagePath;
   final String url;
+  final DateTime? signedUrlExpiresAt;
   final int sortOrder;
+
+  bool get hasDisplayUrl => url.isNotEmpty;
+
+  bool needsUrlRefresh({
+    DateTime? now,
+    Duration tolerance = const Duration(minutes: 1),
+  }) {
+    if (!hasDisplayUrl) {
+      return true;
+    }
+
+    final expiresAt = signedUrlExpiresAt;
+    if (expiresAt == null) {
+      return false;
+    }
+
+    final effectiveNow = now ?? DateTime.now();
+    return !expiresAt.isAfter(effectiveNow.add(tolerance));
+  }
 
   StopPhoto copyWith({
     String? id,
     String? storagePath,
     String? url,
+    DateTime? signedUrlExpiresAt,
     int? sortOrder,
   }) {
     return StopPhoto(
       id: id ?? this.id,
       storagePath: storagePath ?? this.storagePath,
       url: url ?? this.url,
+      signedUrlExpiresAt: signedUrlExpiresAt ?? this.signedUrlExpiresAt,
       sortOrder: sortOrder ?? this.sortOrder,
     );
   }
 
-  factory StopPhoto.fromJson(Map<String, dynamic> json, {required String publicUrl}) {
+  factory StopPhoto.fromJson(
+    Map<String, dynamic> json, {
+    required String publicUrl,
+    DateTime? signedUrlExpiresAt,
+  }) {
     return StopPhoto(
       id: json['id'] as String?,
       storagePath: json['storage_path'] as String? ?? '',
       url: publicUrl,
+      signedUrlExpiresAt: signedUrlExpiresAt,
       sortOrder: json['sort_order'] as int? ?? 0,
     );
   }

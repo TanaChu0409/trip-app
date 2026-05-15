@@ -12,6 +12,7 @@ class StopPhotoService {
 
   static const _bucket = 'stop-photos';
   static const _signedUrlExpirySeconds = 60 * 60;
+  static const signedUrlRefreshTolerance = Duration(minutes: 1);
   static const int maxPhotos = 4;
 
   SupabaseClient get _client => Supabase.instance.client;
@@ -108,19 +109,55 @@ class StopPhotoService {
     return photosByStopId;
   }
 
+  Future<List<StopPhoto>> fetchPhotosForStop(String stopId) async {
+    final rows = await fetchPhotosForStops([stopId]);
+    if (rows.isEmpty) {
+      return const [];
+    }
+
+    return Future.wait(rows.map(buildPhotoFromRow));
+  }
+
   Future<StopPhoto> buildPhotoFromRow(Map<String, dynamic> row) async {
     final storagePath = row['storage_path'] as String? ?? '';
-    final signedUrl = await _client.storage
-        .from(_bucket)
-        .createSignedUrl(storagePath, _signedUrlExpirySeconds);
-    return StopPhoto.fromJson(row, publicUrl: signedUrl);
+    final signedUrl = await _createSignedUrl(storagePath);
+    return StopPhoto.fromJson(
+      row,
+      publicUrl: signedUrl,
+      signedUrlExpiresAt: _nextSignedUrlExpiry(),
+    );
+  }
+
+  Future<StopPhoto> ensureActiveUrl(StopPhoto photo) async {
+    if (photo.storagePath.isEmpty ||
+        !photo.needsUrlRefresh(tolerance: signedUrlRefreshTolerance)) {
+      return photo;
+    }
+
+    final signedUrl = await _createSignedUrl(photo.storagePath);
+    return photo.copyWith(
+      url: signedUrl,
+      signedUrlExpiresAt: _nextSignedUrlExpiry(),
+    );
   }
 
   String _requireUserId() {
     final userId = _client.auth.currentUser?.id;
     if (userId == null || userId.isEmpty) {
-      throw AuthException('登入狀態已失效，請重新登入後再試。');
+      throw const AuthException('登入狀態已失效，請重新登入後再試。');
     }
     return userId;
+  }
+
+  Future<String> _createSignedUrl(String storagePath) {
+    return _client.storage
+        .from(_bucket)
+        .createSignedUrl(storagePath, _signedUrlExpirySeconds);
+  }
+
+  DateTime _nextSignedUrlExpiry() {
+    return DateTime.now().add(
+      const Duration(seconds: _signedUrlExpirySeconds),
+    );
   }
 }

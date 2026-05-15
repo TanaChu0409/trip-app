@@ -87,6 +87,41 @@ as $$
   );
 $$;
 
+create or replace function public.enforce_stop_photo_limit()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare
+  target_stop_id uuid := new.stop_id;
+  existing_count integer;
+begin
+  perform 1
+  from public.stops
+  where id = target_stop_id
+  for update;
+
+  select count(*)
+  into existing_count
+  from public.stop_photos
+  where stop_id = target_stop_id
+    and id is distinct from new.id;
+
+  if existing_count >= 4 then
+    raise exception '每個地點最多只能上傳 4 張照片。';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists enforce_stop_photo_limit on public.stop_photos;
+create trigger enforce_stop_photo_limit
+before insert or update of stop_id
+on public.stop_photos
+for each row
+execute function public.enforce_stop_photo_limit();
+
 -- ── RLS policies ───────────────────────────────────────────────────────────
 
 -- SELECT: trip owner or any shared member can read photos

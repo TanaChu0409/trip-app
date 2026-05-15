@@ -9,6 +9,9 @@ class SupabaseErrorFormatter {
       if (message.contains('Missing required environment variable')) {
         return '缺少 Supabase 設定。請用 --dart-define 或 --dart-define-from-file 提供 SUPABASE_URL 與 SUPABASE_ANON_KEY。';
       }
+      if (_containsCjk(message)) {
+        return message;
+      }
     }
 
     if (error is ArgumentError) {
@@ -68,5 +71,9 @@ class SupabaseErrorFormatter {
       return '[$code] ${error.message}'.trim();
     }
     return error.toString();
+  }
+
+  static bool _containsCjk(String value) {
+    return RegExp(r'[\u4E00-\u9FFF]').hasMatch(value);
   }
 }

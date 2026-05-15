@@ -7,6 +7,7 @@ import 'package:trip_planner_app/core/supabase/supabase_error_formatter.dart';
 import 'package:trip_planner_app/core/theme/app_theme.dart';
 import 'package:trip_planner_app/core/ui/app_scaffold_messenger.dart';
 import 'package:trip_planner_app/features/trip_detail/data/stop_photo_service.dart';
+import 'package:trip_planner_app/features/trip_detail/presentation/widgets/stop_photo_image.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 import 'package:trip_planner_app/features/trips/data/trip_store.dart';
 import 'package:trip_planner_app/features/trips/presentation/widgets/trip_color_picker.dart';
@@ -262,7 +263,23 @@ class _StopFormScreenState extends State<StopFormScreen> {
                             for (final photo in _existingPhotos)
                               _PhotoThumbnail(
                                 key: ValueKey('existing-${photo.id}'),
-                                imageProvider: NetworkImage(photo.url),
+                                image: StopPhotoImage(
+                                  photo: photo,
+                                  imageBuilder: (context, imageUrl) =>
+                                      Image.network(
+                                    imageUrl,
+                                    width: 90,
+                                    height: 90,
+                                    fit: BoxFit.cover,
+                                  ),
+                                  errorBuilder: (context, _) => Container(
+                                    color: Colors.grey.shade200,
+                                    child: const Icon(
+                                      Icons.broken_image,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ),
                                 onDelete: _isSaving
                                     ? null
                                     : () => _removeExistingPhoto(photo),
@@ -272,8 +289,12 @@ class _StopFormScreenState extends State<StopFormScreen> {
                                 i++)
                               _PhotoThumbnail(
                                 key: ValueKey('pending-$i'),
-                                imageProvider: MemoryImage(
-                                    _pendingPhotos[i].bytes),
+                                image: Image(
+                                  image: MemoryImage(_pendingPhotos[i].bytes),
+                                  width: 90,
+                                  height: 90,
+                                  fit: BoxFit.cover,
+                                ),
                                 onDelete: _isSaving
                                     ? null
                                     : () => _removePendingPhoto(i),
@@ -458,13 +479,15 @@ class _StopFormScreenState extends State<StopFormScreen> {
       return;
     }
 
+    final originalStop = _currentStop;
+
     setState(() {
       _isSaving = true;
     });
 
     try {
       final stop = StopItem(
-        id: _currentStop?.id,
+        id: originalStop?.id,
         title: _titleController.text.trim(),
         timeLabel: _cleanOptional(_timeController.text),
         note: _cleanOptional(_noteController.text),
@@ -476,9 +499,11 @@ class _StopFormScreenState extends State<StopFormScreen> {
           for (var index = 0; index < _parkingSpots.length; index += 1)
             _parkingSpots[index].toParkingSpot(index),
         ],
-        sortOrder: _currentStop?.sortOrder ?? 0,
+        photos: List<StopPhoto>.from(_existingPhotos),
+        sortOrder: originalStop?.sortOrder ?? 0,
       );
 
+      var successMessage = _isEditMode ? '已更新地點' : '已新增地點';
       StopItem savedStop;
       if (_isEditMode) {
         savedStop = await _tripStore.updateStop(
@@ -496,36 +521,9 @@ class _StopFormScreenState extends State<StopFormScreen> {
 
       final savedStopId = savedStop.id;
       if (savedStopId != null) {
-        await Future.wait([
-          for (final photo in _photosToDelete)
-            _photoService.deletePhoto(photo),
-        ]);
-
-        final nextSortOrderBase = _existingPhotos.isEmpty
-            ? 0
-            : _existingPhotos
-                    .map((photo) => photo.sortOrder)
-                    .reduce((left, right) => left > right ? left : right) +
-                1;
-        final uploadedPhotos = await Future.wait([
-          for (var index = 0; index < _pendingPhotos.length; index += 1)
-            () {
-              final pending = _pendingPhotos[index];
-              return _photoService.compressAndUpload(
-                stopId: savedStopId,
-                tripId: widget.tripId,
-                sortOrder: nextSortOrderBase + index,
-                bytes: pending.bytes,
-              );
-            }(),
-        ]);
-
-        final finalPhotos = [..._existingPhotos, ...uploadedPhotos];
-        _tripStore.updateStopPhotos(
-          tripId: widget.tripId,
-          dayId: widget.dayId,
-          stopId: savedStopId,
-          photos: finalPhotos,
+        successMessage = await _syncStopPhotos(
+          originalStop: originalStop,
+          savedStop: savedStop,
         );
       }
 
@@ -534,7 +532,7 @@ class _StopFormScreenState extends State<StopFormScreen> {
       }
 
       showAppSnackBar(
-        SnackBar(content: Text(_isEditMode ? '已更新地點' : '已新增地點')),
+        SnackBar(content: Text(successMessage)),
       );
       context.go('/trips/${widget.tripId}');
     } catch (error) {
@@ -551,6 +549,141 @@ class _StopFormScreenState extends State<StopFormScreen> {
           _isSaving = false;
         });
       }
+    }
+  }
+
+  Future<String> _syncStopPhotos({
+    required StopItem? originalStop,
+    required StopItem savedStop,
+  }) async {
+    final savedStopId = savedStop.id;
+    if (savedStopId == null) {
+      return _isEditMode ? '已更新地點' : '已新增地點';
+    }
+
+    final uploadedPhotos = <StopPhoto>[];
+
+    try {
+      final nextSortOrderBase = _existingPhotos.isEmpty
+          ? 0
+          : _existingPhotos
+                  .map((photo) => photo.sortOrder)
+                  .reduce((left, right) => left > right ? left : right) +
+              1;
+
+      for (var index = 0; index < _pendingPhotos.length; index += 1) {
+        final pending = _pendingPhotos[index];
+        final uploadedPhoto = await _photoService.compressAndUpload(
+          stopId: savedStopId,
+          tripId: widget.tripId,
+          sortOrder: nextSortOrderBase + index,
+          bytes: pending.bytes,
+        );
+        uploadedPhotos.add(uploadedPhoto);
+      }
+    } catch (_) {
+      await _cleanupUploadedPhotos(uploadedPhotos);
+
+      final rolledBack = await _rollbackStopAfterPhotoFailure(
+        originalStop: originalStop,
+        savedStop: savedStop,
+      );
+      throw StateError(
+        rolledBack
+            ? '地點照片上傳失敗，已還原這次變更，請稍後再試。'
+            : '地點照片上傳失敗，部分變更可能已儲存，請重新整理後再試。',
+      );
+    }
+
+    final failedDeletes = <StopPhoto>[];
+    for (final photo in _photosToDelete) {
+      try {
+        await _photoService.deletePhoto(photo);
+      } catch (_) {
+        failedDeletes.add(photo);
+      }
+    }
+
+    final optimisticPhotos = [..._existingPhotos, ...uploadedPhotos];
+    if (failedDeletes.isEmpty) {
+      _tripStore.updateStopPhotos(
+        tripId: widget.tripId,
+        dayId: widget.dayId,
+        stopId: savedStopId,
+        photos: optimisticPhotos,
+      );
+      return _isEditMode ? '已更新地點' : '已新增地點';
+    }
+
+    final syncedPhotos = await _fetchSyncedPhotosOrFallback(
+      stopId: savedStopId,
+      fallbackPhotos: [...optimisticPhotos, ...failedDeletes],
+    );
+    _tripStore.updateStopPhotos(
+      tripId: widget.tripId,
+      dayId: widget.dayId,
+      stopId: savedStopId,
+      photos: syncedPhotos,
+    );
+    return '地點已儲存，但部分照片刪除失敗，請再試一次。';
+  }
+
+  Future<void> _cleanupUploadedPhotos(List<StopPhoto> uploadedPhotos) async {
+    for (final photo in uploadedPhotos) {
+      try {
+        await _photoService.deletePhoto(photo);
+      } catch (_) {}
+    }
+  }
+
+  Future<bool> _rollbackStopAfterPhotoFailure({
+    required StopItem? originalStop,
+    required StopItem savedStop,
+  }) async {
+    try {
+      if (_isEditMode) {
+        final originalStopId = originalStop?.id;
+        if (originalStop == null || originalStopId == null) {
+          return false;
+        }
+
+        await _tripStore.updateStop(
+          tripId: widget.tripId,
+          dayId: widget.dayId,
+          stop: originalStop,
+        );
+        _tripStore.updateStopPhotos(
+          tripId: widget.tripId,
+          dayId: widget.dayId,
+          stopId: originalStopId,
+          photos: originalStop.photos,
+        );
+        return true;
+      }
+
+      final savedStopId = savedStop.id;
+      if (savedStopId == null) {
+        return false;
+      }
+
+      return _tripStore.deleteStop(
+        tripId: widget.tripId,
+        dayId: widget.dayId,
+        stopId: savedStopId,
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<List<StopPhoto>> _fetchSyncedPhotosOrFallback({
+    required String stopId,
+    required List<StopPhoto> fallbackPhotos,
+  }) async {
+    try {
+      return await _photoService.fetchPhotosForStop(stopId);
+    } catch (_) {
+      return fallbackPhotos;
     }
   }
 
@@ -730,11 +863,11 @@ class _PendingPhoto {
 class _PhotoThumbnail extends StatelessWidget {
   const _PhotoThumbnail({
     super.key,
-    required this.imageProvider,
+    required this.image,
     this.onDelete,
   });
 
-  final ImageProvider imageProvider;
+  final Widget image;
   final VoidCallback? onDelete;
 
   @override
@@ -745,12 +878,7 @@ class _PhotoThumbnail extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image(
-              image: imageProvider,
-              width: 90,
-              height: 90,
-              fit: BoxFit.cover,
-            ),
+            child: SizedBox(width: 90, height: 90, child: image),
           ),
           if (onDelete != null)
             Positioned(
