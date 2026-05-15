@@ -13,6 +13,72 @@ TripPermission tripPermissionFromBackend(String? value) {
   }
 }
 
+class StopPhoto {
+  const StopPhoto({
+    this.id,
+    required this.storagePath,
+    required this.url,
+    this.signedUrlExpiresAt,
+    this.sortOrder = 0,
+  });
+
+  final String? id;
+  final String storagePath;
+  final String url;
+  final DateTime? signedUrlExpiresAt;
+  final int sortOrder;
+
+  bool get hasDisplayUrl => url.isNotEmpty;
+
+  bool needsUrlRefresh({
+    DateTime? now,
+    Duration tolerance = const Duration(minutes: 1),
+  }) {
+    if (!hasDisplayUrl) {
+      return true;
+    }
+
+    final expiresAt = signedUrlExpiresAt;
+    if (expiresAt == null) {
+      return false;
+    }
+
+    final effectiveNow = now ?? DateTime.now();
+    return !expiresAt.isAfter(effectiveNow.add(tolerance));
+  }
+
+  StopPhoto copyWith({
+    String? id,
+    String? storagePath,
+    String? url,
+    DateTime? signedUrlExpiresAt,
+    int? sortOrder,
+  }) {
+    return StopPhoto(
+      id: id ?? this.id,
+      storagePath: storagePath ?? this.storagePath,
+      url: url ?? this.url,
+      signedUrlExpiresAt: signedUrlExpiresAt ?? this.signedUrlExpiresAt,
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+
+  factory StopPhoto.fromJson(
+    Map<String, dynamic> json, {
+    required String publicUrl,
+    DateTime? signedUrlExpiresAt,
+  }) {
+    return StopPhoto(
+      id: json['id'] as String?,
+      storagePath: json['storage_path'] as String? ?? '',
+      url: publicUrl,
+      signedUrlExpiresAt: signedUrlExpiresAt,
+      sortOrder: json['sort_order'] as int? ?? 0,
+    );
+  }
+}
+
+
 class ParkingSpot {
   const ParkingSpot({
     this.id,
@@ -71,6 +137,7 @@ class StopItem {
     this.color,
     this.isHighlight = false,
     this.parkingSpots = const [],
+    this.photos = const [],
     this.sortOrder = 0,
   });
 
@@ -84,6 +151,7 @@ class StopItem {
   final String? color;
   final bool isHighlight;
   final List<ParkingSpot> parkingSpots;
+  final List<StopPhoto> photos;
   final int sortOrder;
 
   StopItem copyWith({
@@ -96,6 +164,7 @@ class StopItem {
     String? color,
     bool? isHighlight,
     List<ParkingSpot>? parkingSpots,
+    List<StopPhoto>? photos,
     int? sortOrder,
   }) {
     return StopItem(
@@ -108,6 +177,7 @@ class StopItem {
       color: color ?? this.color,
       isHighlight: isHighlight ?? this.isHighlight,
       parkingSpots: parkingSpots ?? this.parkingSpots,
+      photos: photos ?? this.photos,
       sortOrder: sortOrder ?? this.sortOrder,
     );
   }
@@ -129,6 +199,7 @@ class StopItem {
   factory StopItem.fromJson(
     Map<String, dynamic> json, {
     List<ParkingSpot> parkingSpots = const [],
+    List<StopPhoto> photos = const [],
   }) {
     return StopItem(
       id: json['id'] as String?,
@@ -140,6 +211,7 @@ class StopItem {
       color: json['color'] as String?,
       isHighlight: json['is_highlight'] as bool? ?? false,
       parkingSpots: parkingSpots,
+      photos: photos,
       sortOrder: json['sort_order'] as int? ?? 0,
     );
   }

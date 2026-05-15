@@ -1,0 +1,7 @@
+interface:
+  display_name: "Flutter Skills"
+  short_description: "Flutter app workflow and official docs guidance"
+  default_prompt: "Use $flutter-skills to implement, debug, or test a Flutter change in the app/ project."
+
+policy:
+  allow_implicit_invocation: true

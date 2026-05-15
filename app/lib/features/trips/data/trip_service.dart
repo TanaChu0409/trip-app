@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:trip_planner_app/features/trips/data/invite_member_result.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_member.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
+import 'package:trip_planner_app/features/trip_detail/data/stop_photo_service.dart';
 
 class TripService {
   TripService._();
@@ -247,7 +248,15 @@ class TripService {
     final stopRows = await _fetchStops(dayIds);
     final stopIds =
         stopRows.map((row) => row['id'] as String).toList(growable: false);
-    final parkingRows = await _fetchParkingSpots(stopIds);
+
+    // Fetch parking spots and photos in parallel.
+    final photoService = StopPhotoService.instance;
+    final results = await Future.wait([
+      _fetchParkingSpots(stopIds),
+      photoService.fetchPhotoMapForStops(stopIds),
+    ]);
+    final parkingRows = results[0] as List<Map<String, dynamic>>;
+    final photosByStopId = results[1] as Map<String, List<StopPhoto>>;
 
     final parkingByStopId = <String, List<ParkingSpot>>{};
     for (final row in parkingRows) {
@@ -265,6 +274,7 @@ class TripService {
             StopItem.fromJson(
               row,
               parkingSpots: parkingByStopId[stopId] ?? const [],
+              photos: photosByStopId[stopId] ?? const [],
             ),
           );
     }

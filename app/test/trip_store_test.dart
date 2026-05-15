@@ -182,4 +182,141 @@ void main() {
       expect(trip.isReadOnly, isTrue);
     });
   });
+
+  group('StopPhoto', () {
+    test('fromJson parses all fields correctly', () {
+      final expiresAt = DateTime.utc(2026, 1, 2, 3, 4, 5);
+      final json = {
+        'id': 'photo-1',
+        'stop_id': 'stop-1',
+        'storage_path': 'user-1/trip-1/stop-1/abc.jpg',
+        'sort_order': 2,
+      };
+
+      final photo = StopPhoto.fromJson(
+        json,
+        publicUrl: 'https://cdn.example.com/stop-photos/user-1/trip-1/stop-1/abc.jpg',
+        signedUrlExpiresAt: expiresAt,
+      );
+
+      expect(photo.id, 'photo-1');
+      expect(photo.storagePath, 'user-1/trip-1/stop-1/abc.jpg');
+      expect(photo.url, 'https://cdn.example.com/stop-photos/user-1/trip-1/stop-1/abc.jpg');
+      expect(photo.signedUrlExpiresAt, expiresAt);
+      expect(photo.sortOrder, 2);
+    });
+
+    test('fromJson uses defaults for missing fields', () {
+      final photo = StopPhoto.fromJson(
+        const <String, dynamic>{},
+        publicUrl: 'https://cdn.example.com/test.jpg',
+      );
+
+      expect(photo.id, isNull);
+      expect(photo.storagePath, '');
+      expect(photo.sortOrder, 0);
+    });
+
+    test('copyWith overrides only specified fields', () {
+      final original = StopPhoto(
+        id: 'photo-1',
+        storagePath: 'path/a.jpg',
+        url: 'https://cdn.example.com/a.jpg',
+        signedUrlExpiresAt: DateTime.utc(2026, 1, 1),
+        sortOrder: 0,
+      );
+
+      final updated = original.copyWith(sortOrder: 3);
+
+      expect(updated.id, 'photo-1');
+      expect(updated.storagePath, 'path/a.jpg');
+      expect(updated.signedUrlExpiresAt, DateTime.utc(2026, 1, 1));
+      expect(updated.sortOrder, 3);
+    });
+
+    test('needsUrlRefresh returns true when url is missing or expiring soon', () {
+      final now = DateTime.utc(2026, 1, 1, 12);
+
+      const missingUrl = StopPhoto(
+        storagePath: 'user/trip/stop/photo.jpg',
+        url: '',
+      );
+      final expiringSoon = StopPhoto(
+        storagePath: 'user/trip/stop/photo.jpg',
+        url: 'https://cdn.example.com/photo.jpg',
+        signedUrlExpiresAt: now.add(const Duration(seconds: 30)),
+      );
+      final stillValid = StopPhoto(
+        storagePath: 'user/trip/stop/photo.jpg',
+        url: 'https://cdn.example.com/photo.jpg',
+        signedUrlExpiresAt: now.add(const Duration(minutes: 10)),
+      );
+
+      expect(missingUrl.needsUrlRefresh(now: now), isTrue);
+      expect(expiringSoon.needsUrlRefresh(now: now), isTrue);
+      expect(stillValid.needsUrlRefresh(now: now), isFalse);
+    });
+  });
+
+  group('StopItem.photos', () {
+    test('photos defaults to empty list', () {
+      const stop = StopItem(title: '地點');
+      expect(stop.photos, isEmpty);
+    });
+
+    test('fromJson with photos parameter attaches photos', () {
+      const photos = [
+        StopPhoto(
+          id: 'p1',
+          storagePath: 'user/trip/stop/p1.jpg',
+          url: 'https://cdn.example.com/p1.jpg',
+        ),
+      ];
+
+      final stop = StopItem.fromJson(
+        {'id': 'stop-1', 'title': '測試地點'},
+        photos: photos,
+      );
+
+      expect(stop.photos.length, 1);
+      expect(stop.photos.first.id, 'p1');
+    });
+
+    test('copyWith with photos replaces photo list', () {
+      const original = StopItem(title: '地點');
+
+      final updated = original.copyWith(
+        photos: const [
+          StopPhoto(
+            id: 'p1',
+            storagePath: 'path.jpg',
+            url: 'https://cdn.example.com/path.jpg',
+          ),
+        ],
+      );
+
+      expect(original.photos, isEmpty);
+      expect(updated.photos.length, 1);
+    });
+
+    test('toJson does not include photos field', () {
+      const stop = StopItem(
+        id: 'stop-1',
+        title: '地點',
+        photos: [
+          StopPhoto(
+            id: 'p1',
+            storagePath: 'path.jpg',
+            url: 'https://cdn.example.com/path.jpg',
+          ),
+        ],
+      );
+
+      final json = stop.toJson();
+
+      expect(json.containsKey('photos'), isFalse);
+      expect(json['id'], 'stop-1');
+      expect(json['title'], '地點');
+    });
+  });
 }
