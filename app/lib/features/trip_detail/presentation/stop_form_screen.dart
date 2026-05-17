@@ -583,7 +583,7 @@ class _StopFormScreenState extends State<StopFormScreen> {
       }
     } catch (error) {
       debugPrint(
-        'Stop photo sync failed: ${error.runtimeType} ${SupabaseErrorFormatter.diagnosticDetails(error)}',
+        'Stop photo sync failed | type=${error.runtimeType} | details=${SupabaseErrorFormatter.diagnosticDetails(error)}',
       );
       await _cleanupUploadedPhotos(uploadedPhotos);
 
