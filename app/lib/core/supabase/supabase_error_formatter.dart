@@ -99,8 +99,10 @@ class SupabaseErrorFormatter {
       return error.message;
     }
     if (error is StorageException) {
-      final statusCode = error.statusCode == null ? 'unknown' : '${error.statusCode}';
-      return '[storage:$statusCode] ${error.message}'.trim();
+      final statusCode =
+          error.statusCode == null ? 'unknown' : '${error.statusCode}';
+      final reason = _classifyStorageFailure(error.message);
+      return '[storage:$statusCode:$reason] ${error.message}'.trim();
     }
     if (error is PostgrestException) {
       final code = error.code == null || error.code!.isEmpty
@@ -113,5 +115,27 @@ class SupabaseErrorFormatter {
 
   static bool _containsCjk(String value) {
     return RegExp(r'[\u4E00-\u9FFF]').hasMatch(value);
+  }
+
+  static String _classifyStorageFailure(String message) {
+    final normalized = message.trim().toLowerCase();
+
+    if (normalized.contains('bucket not found') ||
+        normalized.contains('object not found')) {
+      return 'missing-object';
+    }
+    if (normalized.contains('signed') && normalized.contains('url')) {
+      return 'signed-url';
+    }
+    if (normalized.contains('row-level security')) {
+      return 'rls';
+    }
+    if (normalized.contains('unauthorized')) {
+      return 'unauthorized';
+    }
+    if (normalized.contains('permission')) {
+      return 'permission';
+    }
+    return 'other';
   }
 }
