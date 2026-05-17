@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import 'package:trip_planner_app/core/utils/image_format.dart';
 import 'package:trip_planner_app/core/utils/photo_compress.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 
@@ -20,7 +21,7 @@ class StopPhotoService {
   /// Compress [bytes] to JPEG, upload to Supabase Storage, insert a row in
   /// `stop_photos`, and return the resulting [StopPhoto].
   ///
-  /// Uploaded path: `{userId}/{tripId}/{stopId}/{uuid}.jpg`
+  /// Uploaded path: `{userId}/{tripId}/{stopId}/{uuid}.{ext}`
   Future<StopPhoto> compressAndUpload({
     required String stopId,
     required String tripId,
@@ -28,16 +29,16 @@ class StopPhotoService {
     required Uint8List bytes,
   }) async {
     final userId = _requireUserId();
-    final compressed = await compressImageToJpeg(bytes);
+    final upload = await _prepareUpload(bytes);
 
-    final filename = '${const Uuid().v4()}.jpg';
+    final filename = '${const Uuid().v4()}.${upload.fileExtension}';
     final storagePath = '$userId/$tripId/$stopId/$filename';
 
     await _client.storage.from(_bucket).uploadBinary(
           storagePath,
-          compressed,
-          fileOptions: const FileOptions(
-            contentType: 'image/jpeg',
+          upload.bytes,
+          fileOptions: FileOptions(
+            contentType: upload.contentType,
             upsert: false,
           ),
         );
@@ -160,4 +161,48 @@ class StopPhotoService {
       const Duration(seconds: _signedUrlExpirySeconds),
     );
   }
+
+  Future<_PreparedStopPhotoUpload> _prepareUpload(Uint8List bytes) async {
+    final sourceFormat = detectImageFormat(bytes);
+
+    try {
+      final compressed = await compressImageToJpeg(bytes);
+      if (compressed.isEmpty) {
+        throw const FormatException('Image compression returned no bytes.');
+      }
+
+      return _PreparedStopPhotoUpload(
+        bytes: compressed,
+        contentType: 'image/jpeg',
+        fileExtension: 'jpg',
+      );
+    } catch (_) {
+      if (sourceFormat.canUploadWithoutConversion) {
+        return _PreparedStopPhotoUpload(
+          bytes: bytes,
+          contentType: sourceFormat.contentType,
+          fileExtension: sourceFormat.fileExtension,
+        );
+      }
+
+      if (sourceFormat == DetectedImageFormat.heic ||
+          sourceFormat == DetectedImageFormat.heif) {
+        throw ArgumentError('目前無法處理這張 iPhone 圖片，請先轉成 JPEG 或 PNG 後再試。');
+      }
+
+      throw ArgumentError('不支援的圖片格式，請改用 JPEG、PNG 或 WebP。');
+    }
+  }
+}
+
+class _PreparedStopPhotoUpload {
+  const _PreparedStopPhotoUpload({
+    required this.bytes,
+    required this.contentType,
+    required this.fileExtension,
+  });
+
+  final Uint8List bytes;
+  final String contentType;
+  final String fileExtension;
 }

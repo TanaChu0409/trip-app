@@ -16,13 +16,35 @@ class SupabaseErrorFormatter {
 
     if (error is ArgumentError) {
       final message = error.message?.toString() ?? '';
-      if (message.contains('不支援的圖片格式')) {
+      if (message.contains('不支援的圖片格式') ||
+          message.contains('iPhone 圖片') ||
+          _containsCjk(message)) {
         return message;
       }
     }
 
     if (error is AuthException) {
       return error.message;
+    }
+
+    if (error is StorageException) {
+      final message = error.message.trim();
+      final normalized = message.toLowerCase();
+
+      if (normalized.contains('object not found') ||
+          normalized.contains('bucket not found')) {
+        return '找不到照片儲存空間。請確認已執行 stop photos 相關的 Supabase migration。';
+      }
+
+      if (normalized.contains('row-level security') ||
+          normalized.contains('unauthorized') ||
+          normalized.contains('permission')) {
+        return 'Supabase 儲存空間權限擋下這次照片操作。請確認 stop-photos bucket 與 storage policy 已正確部署。';
+      }
+
+      if (message.isNotEmpty) {
+        return '照片上傳失敗：$message';
+      }
     }
 
     if (error is PostgrestException) {
