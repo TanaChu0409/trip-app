@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:trip_planner_app/features/trip_detail/data/stop_photo_upload_preparer.dart';
 
 class SupabaseErrorFormatter {
   const SupabaseErrorFormatter._();
@@ -23,6 +24,10 @@ class SupabaseErrorFormatter {
       }
     }
 
+    if (error is StopPhotoUploadException) {
+      return error.userMessage;
+    }
+
     if (error is AuthException) {
       return error.message;
     }
@@ -34,6 +39,10 @@ class SupabaseErrorFormatter {
       if (normalized.contains('object not found') ||
           normalized.contains('bucket not found')) {
         return '找不到照片儲存空間。請確認已執行 stop photos 相關的 Supabase migration。';
+      }
+
+      if (normalized.contains('signed') && normalized.contains('url')) {
+        return '照片已上傳，但無法取得顯示連結，請稍後重新整理再試。';
       }
 
       if (normalized.contains('row-level security') ||
@@ -83,8 +92,15 @@ class SupabaseErrorFormatter {
   }
 
   static String diagnosticDetails(Object error) {
+    if (error is StopPhotoUploadException) {
+      return error.diagnosticMessage;
+    }
     if (error is AuthException) {
       return error.message;
+    }
+    if (error is StorageException) {
+      final statusCode = error.statusCode == null ? 'unknown' : '${error.statusCode}';
+      return '[storage:$statusCode] ${error.message}'.trim();
     }
     if (error is PostgrestException) {
       final code = error.code == null || error.code!.isEmpty

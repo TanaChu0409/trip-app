@@ -581,17 +581,21 @@ class _StopFormScreenState extends State<StopFormScreen> {
         );
         uploadedPhotos.add(uploadedPhoto);
       }
-    } catch (_) {
+    } catch (error) {
+      debugPrint(
+        'Stop photo sync failed: ${error.runtimeType} ${SupabaseErrorFormatter.diagnosticDetails(error)}',
+      );
       await _cleanupUploadedPhotos(uploadedPhotos);
 
       final rolledBack = await _rollbackStopAfterPhotoFailure(
         originalStop: originalStop,
         savedStop: savedStop,
       );
+      final photoFailureMessage = SupabaseErrorFormatter.userMessage(error);
       throw StateError(
         rolledBack
-            ? '地點照片上傳失敗，已還原這次變更，請稍後再試。'
-            : '地點照片上傳失敗，部分變更可能已儲存，請重新整理後再試。',
+            ? '地點照片上傳失敗：${_trimTrailingPeriod(photoFailureMessage)}。已還原這次變更。'
+            : '地點照片上傳失敗：${_trimTrailingPeriod(photoFailureMessage)}。部分變更可能已儲存，請重新整理後再試。',
       );
     }
 
@@ -732,6 +736,13 @@ class _StopFormScreenState extends State<StopFormScreen> {
     final hour = value.hour.toString().padLeft(2, '0');
     final minute = value.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
+  }
+
+  String _trimTrailingPeriod(String message) {
+    if (message.endsWith('。')) {
+      return message.substring(0, message.length - 1);
+    }
+    return message;
   }
 }
 
