@@ -83,10 +83,10 @@ DetectedImageFormat detectImageFormat(Uint8List bytes) {
 
   if (_hasAsciiAt(bytes, 4, 'ftyp')) {
     final brand = _readAscii(bytes, 8, 4).toLowerCase();
-    if (brand.startsWith('heic') || brand.startsWith('heix')) {
+    if (_heicBrands.contains(brand)) {
       return DetectedImageFormat.heic;
     }
-    if (brand.startsWith('heif') || brand.startsWith('hevc')) {
+    if (_heifBrands.contains(brand)) {
       return DetectedImageFormat.heif;
     }
   }
@@ -118,3 +118,20 @@ String _readAscii(Uint8List bytes, int offset, int length) {
   final codes = bytes.sublist(offset, offset + length);
   return String.fromCharCodes(codes);
 }
+
+const Set<String> _heicBrands = {
+  'heic',
+  'heix',
+  'hevc',
+  'hevx',
+  'heim',
+  'heis',
+  'hevm',
+  'hevs',
+};
+
+const Set<String> _heifBrands = {
+  'heif',
+  'mif1',
+  'msf1',
+};

@@ -74,6 +74,25 @@ void main() {
     expect(DetectedImageFormat.heic.canUploadWithoutConversion, isFalse);
   });
 
+  test('detects heif signature for mif1 containers', () {
+    final bytes = Uint8List.fromList(const [
+      0x00,
+      0x00,
+      0x00,
+      0x18,
+      0x66,
+      0x74,
+      0x79,
+      0x70,
+      0x6D,
+      0x69,
+      0x66,
+      0x31,
+    ]);
+
+    expect(detectImageFormat(bytes), DetectedImageFormat.heif);
+  });
+
   test('returns unknown for unsupported bytes', () {
     final bytes = Uint8List.fromList(const [0x01, 0x02, 0x03, 0x04]);
 

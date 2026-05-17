@@ -1,17 +1,33 @@
 # trip_planner_app
 
-A new Flutter project.
+Trip planner app backed by Supabase.
 
-## Getting Started
+## Local development
 
-This project is a starting point for a Flutter application.
+Create `app/.env` from `.env.example` and fill in:
 
-A few resources to get you started if this is your first Flutter project:
+```bash
+SUPABASE_URL=...
+SUPABASE_ANON_KEY=...
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+### Web development
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+For local Chrome testing, always use port `3000` so the Supabase OAuth redirect
+URL matches the project setup:
+
+```bash
+flutter run -d chrome --web-port 3000 --dart-define-from-file=.env
+```
+
+Supabase Dashboard should include:
+
+- Site URL: `http://localhost:3000`
+- Redirect URL: `http://localhost:3000`
+
+### Checks
+
+```bash
+dart analyze
+flutter test
+```

@@ -2,13 +2,16 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "Run Flutter Chrome",
+			"label": "Run Flutter Chrome (localhost:3000)",
 			"type": "shell",
 			"command": "flutter",
 			"args": [
 				"run",
 				"-d",
-				"chrome"
+				"chrome",
+				"--web-port",
+				"3000",
+				"--dart-define-from-file=.env"
 			],
 			"isBackground": true
 		}
