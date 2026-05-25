@@ -52,8 +52,7 @@ class _StopFormScreenState extends State<StopFormScreen> {
   // Existing photos queued for deletion on save.
   final List<StopPhoto> _photosToDelete = [];
 
-  int get _totalPhotoCount =>
-      _existingPhotos.length + _pendingPhotos.length;
+  int get _totalPhotoCount => _existingPhotos.length + _pendingPhotos.length;
 
   bool get _isEditMode => widget.stopId != null;
 
@@ -94,6 +93,7 @@ class _StopFormScreenState extends State<StopFormScreen> {
     _initializeFormIfNeeded();
     final trip = _trip;
     final day = _day;
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
     if (_tripStore.isLoading && trip == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
@@ -125,233 +125,240 @@ class _StopFormScreenState extends State<StopFormScreen> {
           ),
         ),
         child: SafeArea(
-          child: Form(
-            key: _formKey,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.84),
-                    borderRadius: BorderRadius.circular(24),
+          child: AnimatedPadding(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            padding: EdgeInsets.only(bottom: keyboardInset),
+            child: Form(
+              key: _formKey,
+              child: ListView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.84),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(day.label,
+                            style: Theme.of(context).textTheme.titleLarge),
+                        const SizedBox(height: 4),
+                        Text('${trip.title} · ${day.dateLabel}'),
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: 16),
+                  _buildSectionCard(
+                    context,
+                    title: '地點資訊',
                     children: [
-                      Text(day.label,
-                          style: Theme.of(context).textTheme.titleLarge),
-                      const SizedBox(height: 4),
-                      Text('${trip.title} · ${day.dateLabel}'),
+                      TextFormField(
+                        controller: _titleController,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(labelText: '地點名稱'),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return '請輸入地點名稱';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _timeController,
+                        readOnly: true,
+                        decoration: InputDecoration(
+                          labelText: '抵達時間（選填）',
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (_timeController.text.isNotEmpty)
+                                IconButton(
+                                  tooltip: '清除時間',
+                                  onPressed: _isSaving
+                                      ? null
+                                      : () => setState(
+                                          () => _timeController.clear()),
+                                  icon: const Icon(Icons.close_rounded),
+                                ),
+                              IconButton(
+                                tooltip: '選擇時間',
+                                onPressed: _isSaving ? null : _pickTime,
+                                icon: const Icon(Icons.access_time_rounded),
+                              ),
+                            ],
+                          ),
+                        ),
+                        onTap: _isSaving ? null : _pickTime,
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _noteController,
+                        minLines: 3,
+                        maxLines: 5,
+                        decoration: const InputDecoration(labelText: '備註（選填）'),
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _badgeController,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(labelText: '標籤（選填）'),
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _mapUrlController,
+                        keyboardType: TextInputType.url,
+                        decoration:
+                            const InputDecoration(labelText: '地圖連結（選填）'),
+                        validator: _validateOptionalUrl,
+                      ),
+                      const SizedBox(height: 10),
+                      SwitchListTile.adaptive(
+                        value: _isHighlight,
+                        contentPadding: EdgeInsets.zero,
+                        activeThumbColor: AppColors.accentStrong,
+                        activeTrackColor: AppColors.accentSoft,
+                        title: const Text('標記為重點地點'),
+                        subtitle: const Text('重點地點會使用較醒目的卡片底色。'),
+                        onChanged: _isSaving
+                            ? null
+                            : (value) => setState(() => _isHighlight = value),
+                      ),
+                      const SizedBox(height: 14),
+                      TripColorPicker(
+                        label: '地點顏色',
+                        description: '可為這個地點設定獨立顏色；未設定時沿用旅程顏色。',
+                        selectedColor: _selectedColor,
+                        showDefaultOption: true,
+                        defaultLabel: '沿用旅程顏色',
+                        onColorChanged: (value) =>
+                            setState(() => _selectedColor = value),
+                      ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 16),
-                _buildSectionCard(
-                  context,
-                  title: '地點資訊',
-                  children: [
-                    TextFormField(
-                      controller: _titleController,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(labelText: '地點名稱'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return '請輸入地點名稱';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _timeController,
-                      readOnly: true,
-                      decoration: InputDecoration(
-                        labelText: '抵達時間（選填）',
-                        suffixIcon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_timeController.text.isNotEmpty)
-                              IconButton(
-                                tooltip: '清除時間',
-                                onPressed: _isSaving
-                                    ? null
-                                    : () =>
-                                        setState(() => _timeController.clear()),
-                                icon: const Icon(Icons.close_rounded),
-                              ),
-                            IconButton(
-                              tooltip: '選擇時間',
-                              onPressed: _isSaving ? null : _pickTime,
-                              icon: const Icon(Icons.access_time_rounded),
-                            ),
-                          ],
-                        ),
+                  const SizedBox(height: 16),
+                  _buildSectionCard(
+                    context,
+                    title: '地點照片',
+                    action: _totalPhotoCount < StopPhotoService.maxPhotos
+                        ? OutlinedButton.icon(
+                            onPressed: _isSaving ? null : _pickPhoto,
+                            icon:
+                                const Icon(Icons.add_photo_alternate_outlined),
+                            label: const Text('新增照片'),
+                          )
+                        : null,
+                    children: [
+                      Text(
+                        '最多 ${StopPhotoService.maxPhotos} 張，照片上傳後自動壓縮。',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: AppColors.muted),
                       ),
-                      onTap: _isSaving ? null : _pickTime,
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _noteController,
-                      minLines: 3,
-                      maxLines: 5,
-                      decoration: const InputDecoration(labelText: '備註（選填）'),
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _badgeController,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(labelText: '標籤（選填）'),
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _mapUrlController,
-                      keyboardType: TextInputType.url,
-                      decoration: const InputDecoration(labelText: '地圖連結（選填）'),
-                      validator: _validateOptionalUrl,
-                    ),
-                    const SizedBox(height: 10),
-                    SwitchListTile.adaptive(
-                      value: _isHighlight,
-                      contentPadding: EdgeInsets.zero,
-                      activeThumbColor: AppColors.accentStrong,
-                      activeTrackColor: AppColors.accentSoft,
-                      title: const Text('標記為重點地點'),
-                      subtitle: const Text('重點地點會使用較醒目的卡片底色。'),
-                      onChanged: _isSaving
-                          ? null
-                          : (value) => setState(() => _isHighlight = value),
-                    ),
-                    const SizedBox(height: 14),
-                    TripColorPicker(
-                      label: '地點顏色',
-                      description: '可為這個地點設定獨立顏色；未設定時沿用旅程顏色。',
-                      selectedColor: _selectedColor,
-                      showDefaultOption: true,
-                      defaultLabel: '沿用旅程顏色',
-                      onColorChanged: (value) =>
-                          setState(() => _selectedColor = value),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _buildSectionCard(
-                  context,
-                  title: '地點照片',
-                  action: _totalPhotoCount < StopPhotoService.maxPhotos
-                      ? OutlinedButton.icon(
-                          onPressed: _isSaving ? null : _pickPhoto,
-                          icon: const Icon(Icons.add_photo_alternate_outlined),
-                          label: const Text('新增照片'),
-                        )
-                      : null,
-                  children: [
-                    Text(
-                      '最多 ${StopPhotoService.maxPhotos} 張，照片上傳後自動壓縮。',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: AppColors.muted),
-                    ),
-                    if (_totalPhotoCount > 0) ...[
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        height: 90,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          children: [
-                            for (final photo in _existingPhotos)
-                              _PhotoThumbnail(
-                                key: ValueKey('existing-${photo.id}'),
-                                image: StopPhotoImage(
-                                  photo: photo,
-                                  imageBuilder: (context, imageUrl) =>
-                                      Image.network(
-                                    imageUrl,
+                      if (_totalPhotoCount > 0) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 90,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            children: [
+                              for (final photo in _existingPhotos)
+                                _PhotoThumbnail(
+                                  key: ValueKey('existing-${photo.id}'),
+                                  image: StopPhotoImage(
+                                    photo: photo,
+                                    imageBuilder: (context, imageUrl) =>
+                                        Image.network(
+                                      imageUrl,
+                                      width: 90,
+                                      height: 90,
+                                      fit: BoxFit.cover,
+                                    ),
+                                    errorBuilder: (context, _) => Container(
+                                      color: Colors.grey.shade200,
+                                      child: const Icon(
+                                        Icons.broken_image,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ),
+                                  onDelete: _isSaving
+                                      ? null
+                                      : () => _removeExistingPhoto(photo),
+                                ),
+                              for (var i = 0; i < _pendingPhotos.length; i++)
+                                _PhotoThumbnail(
+                                  key: ValueKey('pending-$i'),
+                                  image: Image(
+                                    image: MemoryImage(_pendingPhotos[i].bytes),
                                     width: 90,
                                     height: 90,
                                     fit: BoxFit.cover,
                                   ),
-                                  errorBuilder: (context, _) => Container(
-                                    color: Colors.grey.shade200,
-                                    child: const Icon(
-                                      Icons.broken_image,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
+                                  onDelete: _isSaving
+                                      ? null
+                                      : () => _removePendingPhoto(i),
                                 ),
-                                onDelete: _isSaving
-                                    ? null
-                                    : () => _removeExistingPhoto(photo),
-                              ),
-                            for (var i = 0;
-                                i < _pendingPhotos.length;
-                                i++)
-                              _PhotoThumbnail(
-                                key: ValueKey('pending-$i'),
-                                image: Image(
-                                  image: MemoryImage(_pendingPhotos[i].bytes),
-                                  width: 90,
-                                  height: 90,
-                                  fit: BoxFit.cover,
-                                ),
-                                onDelete: _isSaving
-                                    ? null
-                                    : () => _removePendingPhoto(i),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _buildSectionCard(
-                  context,
-                  title: '鄰近停車場',
-                  action: OutlinedButton.icon(
-                    onPressed: _isSaving ? null : _addParkingSpot,
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('新增停車場'),
                   ),
-                  children: [
-                    if (_parkingSpots.isEmpty)
-                      Text(
-                        '尚未加入停車場資訊。',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(color: AppColors.muted),
-                      ),
-                    for (var index = 0;
-                        index < _parkingSpots.length;
-                        index += 1) ...[
-                      _ParkingSpotFields(
-                        key: ValueKey(
-                            _parkingSpots[index].id ?? 'parking-$index'),
-                        draft: _parkingSpots[index],
-                        index: index,
-                        isSaving: _isSaving,
-                        onRemove: () => _removeParkingSpot(index),
-                      ),
-                      if (index != _parkingSpots.length - 1)
-                        const SizedBox(height: 12),
+                  const SizedBox(height: 16),
+                  _buildSectionCard(
+                    context,
+                    title: '鄰近停車場',
+                    action: OutlinedButton.icon(
+                      onPressed: _isSaving ? null : _addParkingSpot,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('新增停車場'),
+                    ),
+                    children: [
+                      if (_parkingSpots.isEmpty)
+                        Text(
+                          '尚未加入停車場資訊。',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: AppColors.muted),
+                        ),
+                      for (var index = 0;
+                          index < _parkingSpots.length;
+                          index += 1) ...[
+                        _ParkingSpotFields(
+                          key: ValueKey(
+                              _parkingSpots[index].id ?? 'parking-$index'),
+                          draft: _parkingSpots[index],
+                          index: index,
+                          isSaving: _isSaving,
+                          onRemove: () => _removeParkingSpot(index),
+                        ),
+                        if (index != _parkingSpots.length - 1)
+                          const SizedBox(height: 12),
+                      ],
                     ],
-                  ],
-                ),
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: _isSaving ? null : _submit,
-                  icon: _isSaving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2.2),
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: Text(_isSaving ? '儲存中...' : '儲存地點'),
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: _isSaving ? null : _submit,
+                    icon: _isSaving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2.2),
+                          )
+                        : const Icon(Icons.save_outlined),
+                    label: Text(_isSaving ? '儲存中...' : '儲存地點'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
