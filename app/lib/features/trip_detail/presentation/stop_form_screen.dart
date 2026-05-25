@@ -113,6 +113,7 @@ class _StopFormScreenState extends State<StopFormScreen> {
     }
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Text(_isEditMode ? '編輯地點' : '新增地點'),
       ),
