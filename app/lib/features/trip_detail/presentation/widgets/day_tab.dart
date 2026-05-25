@@ -46,7 +46,7 @@ class _DayTabState extends State<DayTab> with AutomaticKeepAliveClientMixin {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isActive != widget.isActive ||
         oldWidget.isReadOnly != widget.isReadOnly ||
-        oldWidget.day.stops.length != widget.day.stops.length) {
+        _visibleStopCount(oldWidget.day) != _visibleStopCount(widget.day)) {
       _scheduleVisibilityCheck();
     }
   }
@@ -107,6 +107,8 @@ class _DayTabState extends State<DayTab> with AutomaticKeepAliveClientMixin {
     _viewportSize = MediaQuery.sizeOf(context);
     _scheduleVisibilityCheck();
 
+    final visibleStops = _visibleStops;
+
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
         _scheduleVisibilityCheck();
@@ -118,11 +120,15 @@ class _DayTabState extends State<DayTab> with AutomaticKeepAliveClientMixin {
         onReorder: widget.isReadOnly
             ? (_, __) {}
             : (oldIndex, newIndex) async {
+                final mappedOldIndex =
+                    _mapVisibleReorderIndex(visibleStops, oldIndex);
+                final mappedNewIndex =
+                    _mapVisibleReorderIndex(visibleStops, newIndex);
                 await TripStore.instance.reorderStops(
                   tripId: widget.tripId,
                   dayId: widget.day.id,
-                  oldIndex: oldIndex,
-                  newIndex: newIndex,
+                  oldIndex: mappedOldIndex,
+                  newIndex: mappedNewIndex,
                 );
                 _scheduleVisibilityCheck();
               },
@@ -140,19 +146,45 @@ class _DayTabState extends State<DayTab> with AutomaticKeepAliveClientMixin {
                 ),
               ),
         children: [
-          for (var index = 0; index < widget.day.stops.length; index += 1)
+          for (var index = 0; index < visibleStops.length; index += 1)
             Padding(
-              key: ValueKey(widget.day.stops[index].id ?? 'stop-$index'),
+              key: ValueKey(visibleStops[index].stop.id ?? 'stop-$index'),
               padding: EdgeInsets.only(
-                  bottom:
-                      index == widget.day.stops.length - 1 && widget.isReadOnly
-                          ? 0
-                          : 14),
-              child: _buildStopItem(context, widget.day.stops[index], index),
+                bottom: index == visibleStops.length - 1 && widget.isReadOnly
+                    ? 0
+                    : 14,
+              ),
+              child: _buildStopItem(context, visibleStops[index].stop, index),
             ),
         ],
       ),
     );
+  }
+
+  List<_VisibleStop> get _visibleStops {
+    return [
+      for (var index = 0; index < widget.day.stops.length; index += 1)
+        if (parseTimeLabelToMinutes(widget.day.stops[index].timeLabel) != null)
+          _VisibleStop(stop: widget.day.stops[index], sourceIndex: index),
+    ];
+  }
+
+  int _visibleStopCount(TripDay day) {
+    return day.stops
+        .where((stop) => parseTimeLabelToMinutes(stop.timeLabel) != null)
+        .length;
+  }
+
+  int _mapVisibleReorderIndex(List<_VisibleStop> visibleStops, int index) {
+    if (visibleStops.isEmpty) {
+      return 0;
+    }
+
+    if (index >= visibleStops.length) {
+      return visibleStops.last.sourceIndex + 1;
+    }
+
+    return visibleStops[index].sourceIndex;
   }
 
   Widget _buildStopItem(BuildContext context, StopItem stop, int index) {
@@ -236,4 +268,11 @@ class _DayTabState extends State<DayTab> with AutomaticKeepAliveClientMixin {
     );
     return deleted;
   }
+}
+
+class _VisibleStop {
+  const _VisibleStop({required this.stop, required this.sourceIndex});
+
+  final StopItem stop;
+  final int sourceIndex;
 }
