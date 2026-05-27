@@ -352,21 +352,6 @@ class TripService {
         return dayComparison;
       }
 
-      final leftMinutes = parseTimeLabelToMinutes(left['time'] as String?);
-      final rightMinutes = parseTimeLabelToMinutes(right['time'] as String?);
-      if (leftMinutes == null && rightMinutes != null) {
-        return 1;
-      }
-      if (leftMinutes != null && rightMinutes == null) {
-        return -1;
-      }
-      if (leftMinutes != null && rightMinutes != null) {
-        final timeComparison = leftMinutes.compareTo(rightMinutes);
-        if (timeComparison != 0) {
-          return timeComparison;
-        }
-      }
-
       final leftSortOrder = left['sort_order'] as int? ?? 0;
       final rightSortOrder = right['sort_order'] as int? ?? 0;
       return leftSortOrder.compareTo(rightSortOrder);
@@ -456,8 +441,7 @@ class TripService {
     Map<String, Map<String, dynamic>> profileByUserId,
   ) {
     row['profiles'] =
-        profileByUserId[row['user_id'] as String] ??
-        const <String, dynamic>{};
+        profileByUserId[row['user_id'] as String] ?? const <String, dynamic>{};
     return TripMember.fromJson(row);
   }
 }
