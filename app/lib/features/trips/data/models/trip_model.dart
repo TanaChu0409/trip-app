@@ -78,7 +78,6 @@ class StopPhoto {
   }
 }
 
-
 class ParkingSpot {
   const ParkingSpot({
     this.id,

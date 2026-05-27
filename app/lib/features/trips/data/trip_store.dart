@@ -151,9 +151,10 @@ class TripStore extends ChangeNotifier {
       next: draft,
     );
 
-    final updatedStops = _normalizeStops(
-      [...location.day.stops]..[stopIndex] = savedStop,
-    );
+    final nextStops = [...location.day.stops]..[stopIndex] = savedStop;
+    final updatedStops = existingStop.timeLabel == savedStop.timeLabel
+        ? _normalizeStopsInCurrentOrder(nextStops)
+        : _normalizeStops(nextStops);
     final updatedTrip = _replaceDayAt(
       location.trip,
       location.dayIndex,
@@ -195,7 +196,7 @@ class TripStore extends ChangeNotifier {
 
     final movedStop = stops.removeAt(oldIndex);
     stops.insert(targetIndex, movedStop);
-    final reorderedStops = _normalizeStops(stops);
+    final reorderedStops = _normalizeStopsInCurrentOrder(stops);
     final updatedTrip = _replaceDayAt(
       location.trip,
       location.dayIndex,
@@ -231,8 +232,8 @@ class TripStore extends ChangeNotifier {
     }
 
     await _stopService.deleteStop(stop.id!);
-    final updatedStops =
-        _normalizeStops([...location.day.stops]..removeAt(stopIndex));
+    final updatedStops = _normalizeStopsInCurrentOrder(
+        [...location.day.stops]..removeAt(stopIndex));
     final updatedTrip = _replaceDayAt(
       location.trip,
       location.dayIndex,
@@ -263,8 +264,7 @@ class TripStore extends ChangeNotifier {
         location.day.stops.indexWhere((item) => item.id == stopId);
     if (stopIndex == -1) return;
 
-    final updatedStop =
-        location.day.stops[stopIndex].copyWith(photos: photos);
+    final updatedStop = location.day.stops[stopIndex].copyWith(photos: photos);
     final updatedTrip = _replaceDayAt(
       location.trip,
       location.dayIndex,
@@ -478,7 +478,7 @@ class TripStore extends ChangeNotifier {
   /// that any in-flight [_loadTrips] call will see the changed token and
   /// discard its results rather than repopulating the store.
   Future<void> clearForSignOut() async {
-    _sessionToken++;           // synchronous – happens before any await
+    _sessionToken++; // synchronous – happens before any await
     await _realtimeService.unsubscribe();
     _trips.clear();
     _membersByTripId.clear();
@@ -672,6 +672,13 @@ class TripStore extends ChangeNotifier {
     return [
       for (var index = 0; index < orderedStops.length; index += 1)
         orderedStops[index].copyWith(sortOrder: index),
+    ];
+  }
+
+  List<StopItem> _normalizeStopsInCurrentOrder(List<StopItem> stops) {
+    return [
+      for (var index = 0; index < stops.length; index += 1)
+        stops[index].copyWith(sortOrder: index),
     ];
   }
 

@@ -195,13 +195,15 @@ void main() {
 
       final photo = StopPhoto.fromJson(
         json,
-        publicUrl: 'https://cdn.example.com/stop-photos/user-1/trip-1/stop-1/abc.jpg',
+        publicUrl:
+            'https://cdn.example.com/stop-photos/user-1/trip-1/stop-1/abc.jpg',
         signedUrlExpiresAt: expiresAt,
       );
 
       expect(photo.id, 'photo-1');
       expect(photo.storagePath, 'user-1/trip-1/stop-1/abc.jpg');
-      expect(photo.url, 'https://cdn.example.com/stop-photos/user-1/trip-1/stop-1/abc.jpg');
+      expect(photo.url,
+          'https://cdn.example.com/stop-photos/user-1/trip-1/stop-1/abc.jpg');
       expect(photo.signedUrlExpiresAt, expiresAt);
       expect(photo.sortOrder, 2);
     });
@@ -234,7 +236,8 @@ void main() {
       expect(updated.sortOrder, 3);
     });
 
-    test('needsUrlRefresh returns true when url is missing or expiring soon', () {
+    test('needsUrlRefresh returns true when url is missing or expiring soon',
+        () {
       final now = DateTime.utc(2026, 1, 1, 12);
 
       const missingUrl = StopPhoto(
