@@ -4,7 +4,7 @@ import 'package:trip_planner_app/features/trip_detail/presentation/widgets/day_t
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 
 void main() {
-  testWidgets('day timeline hides stops without a time',
+  testWidgets('day timeline shows stops without a time',
       (WidgetTester tester) async {
     const day = TripDay(
       id: 'day-1',
@@ -36,7 +36,7 @@ void main() {
 
     expect(find.text('早餐'), findsOneWidget);
     expect(find.text('08:30'), findsOneWidget);
-    expect(find.text('還沒排時間'), findsNothing);
-    expect(find.text('未排定'), findsNothing);
+    expect(find.text('還沒排時間'), findsOneWidget);
+    expect(find.text('未排定'), findsOneWidget);
   });
 }
