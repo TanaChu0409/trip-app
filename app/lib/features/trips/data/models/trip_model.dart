@@ -76,6 +76,29 @@ class StopPhoto {
       sortOrder: json['sort_order'] as int? ?? 0,
     );
   }
+
+  Map<String, dynamic> toCacheJson() {
+    return {
+      if (id != null) 'id': id,
+      'storage_path': storagePath,
+      'url': url,
+      'signed_url_expires_at': signedUrlExpiresAt?.toIso8601String(),
+      'sort_order': sortOrder,
+    };
+  }
+
+  factory StopPhoto.fromCacheJson(Map<String, dynamic> json) {
+    final rawExpiresAt = json['signed_url_expires_at'] as String?;
+
+    return StopPhoto(
+      id: json['id'] as String?,
+      storagePath: json['storage_path'] as String? ?? '',
+      url: json['url'] as String? ?? '',
+      signedUrlExpiresAt:
+          rawExpiresAt == null ? null : DateTime.tryParse(rawExpiresAt),
+      sortOrder: json['sort_order'] as int? ?? 0,
+    );
+  }
 }
 
 class ParkingSpot {
@@ -123,6 +146,8 @@ class ParkingSpot {
       sortOrder: json['sort_order'] as int? ?? 0,
     );
   }
+
+  Map<String, dynamic> toCacheJson() => toJson();
 }
 
 class StopItem {
@@ -214,6 +239,32 @@ class StopItem {
       sortOrder: json['sort_order'] as int? ?? 0,
     );
   }
+
+  Map<String, dynamic> toCacheJson() {
+    return {
+      ...toJson(),
+      'parking_spots': [
+        for (final parkingSpot in parkingSpots) parkingSpot.toCacheJson(),
+      ],
+      'photos': [
+        for (final photo in photos) photo.toCacheJson(),
+      ],
+    };
+  }
+
+  factory StopItem.fromCacheJson(Map<String, dynamic> json) {
+    return StopItem.fromJson(
+      json,
+      parkingSpots: [
+        for (final parkingSpotJson in _jsonMapList(json['parking_spots']))
+          ParkingSpot.fromJson(parkingSpotJson),
+      ],
+      photos: [
+        for (final photoJson in _jsonMapList(json['photos']))
+          StopPhoto.fromCacheJson(photoJson),
+      ],
+    );
+  }
 }
 
 class TripDay {
@@ -244,6 +295,31 @@ class TripDay {
       dateLabel: dateLabel ?? this.dateLabel,
       subtitle: subtitle ?? this.subtitle,
       stops: stops ?? this.stops,
+    );
+  }
+
+  Map<String, dynamic> toCacheJson() {
+    return {
+      'id': id,
+      'label': label,
+      'date_label': dateLabel,
+      'subtitle': subtitle,
+      'stops': [
+        for (final stop in stops) stop.toCacheJson(),
+      ],
+    };
+  }
+
+  factory TripDay.fromCacheJson(Map<String, dynamic> json) {
+    return TripDay(
+      id: json['id'] as String? ?? '',
+      label: json['label'] as String? ?? '',
+      dateLabel: json['date_label'] as String? ?? '',
+      subtitle: json['subtitle'] as String? ?? '',
+      stops: [
+        for (final stopJson in _jsonMapList(json['stops']))
+          StopItem.fromCacheJson(stopJson),
+      ],
     );
   }
 }
@@ -305,6 +381,44 @@ class TripSummary {
   }
 
   int get stopCount => days.fold(0, (sum, day) => sum + day.stops.length);
+
+  Map<String, dynamic> toCacheJson() {
+    return {
+      'id': id,
+      'title': title,
+      'date_range': dateRange,
+      'role': role.name,
+      'days': [
+        for (final day in days) day.toCacheJson(),
+      ],
+      'share_code': shareCode,
+      'shared_from_trip_id': sharedFromTripId,
+      'color': color,
+      'permission': permission?.name,
+    };
+  }
+
+  factory TripSummary.fromCacheJson(Map<String, dynamic> json) {
+    final role = _tripRoleFromCache(json['role'] as String?);
+    if (role == null) {
+      throw const FormatException('Invalid cached trip role.');
+    }
+
+    return TripSummary(
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      dateRange: json['date_range'] as String? ?? '',
+      role: role,
+      days: [
+        for (final dayJson in _jsonMapList(json['days']))
+          TripDay.fromCacheJson(dayJson),
+      ],
+      shareCode: json['share_code'] as String?,
+      sharedFromTripId: json['shared_from_trip_id'] as String?,
+      color: json['color'] as String?,
+      permission: _tripPermissionFromCache(json['permission'] as String?),
+    );
+  }
 }
 
 List<StopItem> sortStopsChronologically(Iterable<StopItem> stops) {
@@ -381,4 +495,37 @@ class _IndexedStop {
 
   final StopItem stop;
   final int index;
+}
+
+List<Map<String, dynamic>> _jsonMapList(Object? value) {
+  if (value is! List) {
+    return const [];
+  }
+
+  return [
+    for (final item in value)
+      if (item is Map) Map<String, dynamic>.from(item),
+  ];
+}
+
+TripRole? _tripRoleFromCache(String? value) {
+  switch (value) {
+    case 'guest':
+      return TripRole.guest;
+    case 'owner':
+      return TripRole.owner;
+    default:
+      return null;
+  }
+}
+
+TripPermission? _tripPermissionFromCache(String? value) {
+  switch (value) {
+    case 'editor':
+      return TripPermission.editor;
+    case 'viewer':
+      return TripPermission.viewer;
+    default:
+      return null;
+  }
 }

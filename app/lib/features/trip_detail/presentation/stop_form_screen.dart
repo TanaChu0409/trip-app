@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:trip_planner_app/core/supabase/supabase_error_formatter.dart';
+import 'package:trip_planner_app/core/supabase/supabase_session_guard.dart';
 import 'package:trip_planner_app/core/theme/app_theme.dart';
 import 'package:trip_planner_app/core/ui/app_scaffold_messenger.dart';
+import 'package:trip_planner_app/features/auth/data/session_expiry_handler.dart';
 import 'package:trip_planner_app/features/trip_detail/data/stop_photo_service.dart';
 import 'package:trip_planner_app/features/trip_detail/presentation/widgets/stop_photo_image.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
@@ -544,6 +546,9 @@ class _StopFormScreenState extends State<StopFormScreen> {
       );
       context.go('/trips/${widget.tripId}');
     } catch (error) {
+      if (await SessionExpiryHandler.signOutIfSessionExpired(error)) {
+        return;
+      }
       if (!mounted) {
         return;
       }
@@ -593,12 +598,22 @@ class _StopFormScreenState extends State<StopFormScreen> {
       debugPrint(
         'Stop photo sync failed | type=${error.runtimeType} | details=${SupabaseErrorFormatter.diagnosticDetails(error)}',
       );
-      await _cleanupUploadedPhotos(uploadedPhotos);
+      final isSessionExpired =
+          SupabaseSessionGuard.isSessionExpiredError(error);
+      await _cleanupUploadedPhotos(
+        uploadedPhotos,
+        handleSessionExpiry: !isSessionExpired,
+      );
 
       final rolledBack = await _rollbackStopAfterPhotoFailure(
         originalStop: originalStop,
         savedStop: savedStop,
       );
+      if (isSessionExpired) {
+        await SessionExpiryHandler.signOutIfSessionExpired(error);
+        rethrow;
+      }
+
       final photoFailureMessage = SupabaseErrorFormatter.userMessage(error);
       throw StateError(
         rolledBack
@@ -611,7 +626,10 @@ class _StopFormScreenState extends State<StopFormScreen> {
     for (final photo in _photosToDelete) {
       try {
         await _photoService.deletePhoto(photo);
-      } catch (_) {
+      } catch (error) {
+        if (await SessionExpiryHandler.signOutIfSessionExpired(error)) {
+          rethrow;
+        }
         failedDeletes.add(photo);
       }
     }
@@ -640,11 +658,18 @@ class _StopFormScreenState extends State<StopFormScreen> {
     return '地點已儲存，但部分照片刪除失敗，請再試一次。';
   }
 
-  Future<void> _cleanupUploadedPhotos(List<StopPhoto> uploadedPhotos) async {
+  Future<void> _cleanupUploadedPhotos(
+    List<StopPhoto> uploadedPhotos, {
+    bool handleSessionExpiry = true,
+  }) async {
     for (final photo in uploadedPhotos) {
       try {
         await _photoService.deletePhoto(photo);
-      } catch (_) {}
+      } catch (error) {
+        if (handleSessionExpiry) {
+          await SessionExpiryHandler.signOutIfSessionExpired(error);
+        }
+      }
     }
   }
 
@@ -694,7 +719,10 @@ class _StopFormScreenState extends State<StopFormScreen> {
   }) async {
     try {
       return await _photoService.fetchPhotosForStop(stopId);
-    } catch (_) {
+    } catch (error) {
+      if (await SessionExpiryHandler.signOutIfSessionExpired(error)) {
+        rethrow;
+      }
       return fallbackPhotos;
     }
   }

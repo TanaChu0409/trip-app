@@ -67,6 +67,22 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                         ),
                       ),
                       IconButton.outlined(
+                        tooltip: '重新從雲端同步',
+                        onPressed: _tripStore.isLoading
+                            ? null
+                            : () => _refreshTrips(context),
+                        icon: _tripStore.isRefreshing
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                ),
+                              )
+                            : const Icon(Icons.cloud_sync_outlined),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.outlined(
                         tooltip: '登出',
                         onPressed: () => _signOut(context),
                         icon: const Icon(Icons.logout_rounded),
@@ -81,9 +97,9 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                     const SizedBox(height: 24),
                   ] else if (hasLoadError) ...[
                     _LoadErrorCard(
-                      onRetry: () => _tripStore.reloadTrips(),
-                      errorMessage:
-                          SupabaseErrorFormatter.userMessage(_tripStore.loadError!),
+                      onRetry: () => _refreshTrips(context),
+                      errorMessage: SupabaseErrorFormatter.userMessage(
+                          _tripStore.loadError!),
                     ),
                     const SizedBox(height: 24),
                   ],
@@ -122,6 +138,24 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _refreshTrips(BuildContext context) async {
+    await _tripStore.reloadTrips();
+    if (!context.mounted) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    final error = _tripStore.loadError;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          error == null ? '已同步最新旅程' : SupabaseErrorFormatter.userMessage(error),
+        ),
+      ),
     );
   }
 
@@ -245,7 +279,6 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
       SnackBar(content: Text(left ? '已退出旅程：${trip.title}' : '退出旅程失敗')),
     );
   }
-
 }
 
 class _CreateTripSheet extends StatefulWidget {
