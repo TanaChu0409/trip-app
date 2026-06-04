@@ -117,8 +117,7 @@ class TripStore extends ChangeNotifier {
 
     final draft =
         _normalizeStopDraft(stop, sortOrder: location.day.stops.length);
-    final savedStop =
-        await _withSessionGuard(() => _saveStop(location.day.id, draft));
+    final savedStop = await _saveStop(location.day.id, draft);
     final updatedStops = _normalizeStops([...location.day.stops, savedStop]);
     final updatedTrip = _replaceDayAt(
       location.trip,
@@ -162,11 +161,9 @@ class TripStore extends ChangeNotifier {
       sortOrder: existingStop.sortOrder,
     );
 
-    final savedStop = await _withSessionGuard(
-      () => _updateStopWithParking(
-        previous: existingStop,
-        next: draft,
-      ),
+    final savedStop = await _updateStopWithParking(
+      previous: existingStop,
+      next: draft,
     );
 
     final nextStops = [...location.day.stops]..[stopIndex] = savedStop;
@@ -382,7 +379,7 @@ class TripStore extends ChangeNotifier {
     required DateTime endDate,
     String? color,
   }) async {
-    final trip = await _withSessionGuard(
+    final trip = await _withSessionGuardNoRetry(
       () => _tripService.createTrip(
         title: title,
         startDate: startDate,
@@ -404,7 +401,7 @@ class TripStore extends ChangeNotifier {
     String email,
     TripPermission permission,
   ) async {
-    return _withSessionGuard(
+    return _withSessionGuardNoRetry(
       () => _tripService.inviteMemberByEmail(tripId, email, permission),
     );
   }
@@ -730,6 +727,22 @@ class TripStore extends ChangeNotifier {
     }
   }
 
+  Future<T> _withSessionGuardNoRetry<T>(Future<T> Function() action) async {
+    try {
+      return await action();
+    } catch (error) {
+      if (!SupabaseSessionGuard.isSessionExpiredError(error)) {
+        rethrow;
+      }
+      if (!await SupabaseSessionGuard.refreshCurrentSessionIfExpired(
+        forceRefresh: true,
+      )) {
+        await _handleExpiredSession();
+      }
+      rethrow;
+    }
+  }
+
   Future<void> _handleExpiredSession() async {
     final userId =
         _cacheUserId ?? Supabase.instance.client.auth.currentUser?.id;
@@ -768,9 +781,11 @@ class TripStore extends ChangeNotifier {
   }
 
   Future<StopItem> _saveStop(String dayId, StopItem stop) async {
-    final createdStop = await _stopService.createStop(
-      dayId: dayId,
-      stop: stop.copyWith(id: null, parkingSpots: const []),
+    final createdStop = await _withSessionGuardNoRetry(
+      () => _stopService.createStop(
+        dayId: dayId,
+        stop: stop.copyWith(id: null, parkingSpots: const []),
+      ),
     );
     final parkingSpots = await _syncParkingSpots(
       stopId: createdStop.id!,
@@ -792,8 +807,9 @@ class TripStore extends ChangeNotifier {
       throw StateError('Stop id is required for update.');
     }
 
-    final updatedStop =
-        await _stopService.updateStop(next.copyWith(parkingSpots: const []));
+    final updatedStop = await _withSessionGuard(
+      () => _stopService.updateStop(next.copyWith(parkingSpots: const [])),
+    );
     final parkingSpots = await _syncParkingSpots(
       stopId: next.id!,
       previous: previous.parkingSpots,
@@ -819,13 +835,16 @@ class TripStore extends ChangeNotifier {
     final saved = await Future.wait(
       normalized.map((parkingSpot) async {
         if (parkingSpot.id != null && previousIds.contains(parkingSpot.id)) {
-          final updated =
-              await _parkingSpotService.updateParkingSpot(parkingSpot);
+          final updated = await _withSessionGuard(
+            () => _parkingSpotService.updateParkingSpot(parkingSpot),
+          );
           return updated.copyWith(sortOrder: parkingSpot.sortOrder);
         } else {
-          final created = await _parkingSpotService.createParkingSpot(
-            stopId: stopId,
-            parkingSpot: parkingSpot.copyWith(id: null),
+          final created = await _withSessionGuardNoRetry(
+            () => _parkingSpotService.createParkingSpot(
+              stopId: stopId,
+              parkingSpot: parkingSpot.copyWith(id: null),
+            ),
           );
           return created.copyWith(sortOrder: parkingSpot.sortOrder);
         }
@@ -837,11 +856,17 @@ class TripStore extends ChangeNotifier {
     await Future.wait([
       for (final removed in previous)
         if (removed.id != null && !savedIds.contains(removed.id))
-          _parkingSpotService.deleteParkingSpot(removed.id!),
+          _withSessionGuard(
+            () => _parkingSpotService.deleteParkingSpot(removed.id!),
+          ),
     ]);
 
-    await _parkingSpotService.reorderParkingSpots(
-        stopId: stopId, parkingSpots: saved);
+    await _withSessionGuard(
+      () => _parkingSpotService.reorderParkingSpots(
+        stopId: stopId,
+        parkingSpots: saved,
+      ),
+    );
     return saved;
   }
 
