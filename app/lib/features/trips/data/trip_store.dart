@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:trip_planner_app/core/supabase/supabase_session_guard.dart';
 import 'package:trip_planner_app/features/notifications/services/notification_service.dart';
 import 'package:trip_planner_app/features/trip_detail/data/parking_spot_service.dart';
 import 'package:trip_planner_app/features/trip_detail/data/stop_service.dart';
@@ -9,6 +11,7 @@ import 'package:trip_planner_app/features/trips/data/models/trip_member.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 import 'package:trip_planner_app/features/trips/data/trip_realtime_service.dart';
 import 'package:trip_planner_app/features/trips/data/trip_service.dart';
+import 'package:trip_planner_app/features/trips/data/trip_snapshot_cache.dart';
 
 class TripStore extends ChangeNotifier {
   TripStore._();
@@ -21,11 +24,15 @@ class TripStore extends ChangeNotifier {
   final StopService _stopService = StopService.instance;
   final ParkingSpotService _parkingSpotService = ParkingSpotService.instance;
   final TripRealtimeService _realtimeService = TripRealtimeService.instance;
+  final TripSnapshotCache _snapshotCache = TripSnapshotCache.instance;
 
   Future<void>? _loadFuture;
   bool _isLoading = false;
   bool _isInitialized = false;
+  bool _hasCachedData = false;
+  DateTime? _lastSyncedAt;
   Object? _loadError;
+  String? _cacheUserId;
 
   /// Monotonically-increasing token that is incremented each time
   /// [clearForSignOut] is called.  [_loadTrips] captures the value at the
@@ -37,6 +44,9 @@ class TripStore extends ChangeNotifier {
   List<TripSummary> get trips => List<TripSummary>.unmodifiable(_trips);
   bool get isLoading => _isLoading;
   bool get isInitialized => _isInitialized;
+  bool get hasCachedData => _hasCachedData;
+  bool get isRefreshing => _isLoading && _trips.isNotEmpty;
+  DateTime? get lastSyncedAt => _lastSyncedAt;
   Object? get loadError => _loadError;
 
   Future<void> ensureLoaded({bool force = false}) {
@@ -47,7 +57,7 @@ class TripStore extends ChangeNotifier {
       return Future.value();
     }
 
-    final future = _loadTrips();
+    final future = _loadTrips(loadCacheFirst: !force);
     _loadFuture = future;
     return future;
   }
@@ -116,9 +126,14 @@ class TripStore extends ChangeNotifier {
     );
 
     _trips[location.tripIndex] = updatedTrip;
-    await _stopService.reorderStops(
-        dayId: location.day.id, stops: updatedStops);
+    await _withSessionGuard(
+      () => _stopService.reorderStops(
+        dayId: location.day.id,
+        stops: updatedStops,
+      ),
+    );
     await _refreshTripReminders(updatedTrip);
+    _persistSnapshotInBackground();
     notifyListeners();
     return updatedStops.firstWhere((item) => item.id == savedStop.id,
         orElse: () => savedStop);
@@ -162,9 +177,14 @@ class TripStore extends ChangeNotifier {
     );
 
     _trips[location.tripIndex] = updatedTrip;
-    await _stopService.reorderStops(
-        dayId: location.day.id, stops: updatedStops);
+    await _withSessionGuard(
+      () => _stopService.reorderStops(
+        dayId: location.day.id,
+        stops: updatedStops,
+      ),
+    );
     await _refreshTripReminders(updatedTrip);
+    _persistSnapshotInBackground();
     notifyListeners();
     return updatedStops.firstWhere((item) => item.id == savedStop.id,
         orElse: () => savedStop);
@@ -204,9 +224,14 @@ class TripStore extends ChangeNotifier {
     );
 
     _trips[location.tripIndex] = updatedTrip;
-    await _stopService.reorderStops(
-        dayId: location.day.id, stops: reorderedStops);
+    await _withSessionGuard(
+      () => _stopService.reorderStops(
+        dayId: location.day.id,
+        stops: reorderedStops,
+      ),
+    );
     await _refreshTripReminders(updatedTrip);
+    _persistSnapshotInBackground();
     notifyListeners();
   }
 
@@ -231,7 +256,7 @@ class TripStore extends ChangeNotifier {
       return false;
     }
 
-    await _stopService.deleteStop(stop.id!);
+    await _withSessionGuard(() => _stopService.deleteStop(stop.id!));
     final updatedStops = _normalizeStopsInCurrentOrder(
         [...location.day.stops]..removeAt(stopIndex));
     final updatedTrip = _replaceDayAt(
@@ -241,9 +266,14 @@ class TripStore extends ChangeNotifier {
     );
 
     _trips[location.tripIndex] = updatedTrip;
-    await _stopService.reorderStops(
-        dayId: location.day.id, stops: updatedStops);
+    await _withSessionGuard(
+      () => _stopService.reorderStops(
+        dayId: location.day.id,
+        stops: updatedStops,
+      ),
+    );
     await _refreshTripReminders(updatedTrip);
+    _persistSnapshotInBackground();
     notifyListeners();
     return true;
   }
@@ -273,6 +303,7 @@ class TripStore extends ChangeNotifier {
       ),
     );
     _trips[location.tripIndex] = updatedTrip;
+    _persistSnapshotInBackground();
     notifyListeners();
   }
 
@@ -348,15 +379,18 @@ class TripStore extends ChangeNotifier {
     required DateTime endDate,
     String? color,
   }) async {
-    final trip = await _tripService.createTrip(
-      title: title,
-      startDate: startDate,
-      endDate: endDate,
-      color: color,
+    final trip = await _withSessionGuardNoRetry(
+      () => _tripService.createTrip(
+        title: title,
+        startDate: startDate,
+        endDate: endDate,
+        color: color,
+      ),
     );
 
     _trips.insert(0, trip);
     await NotificationService.instance.scheduleTripReminders(trip);
+    _persistSnapshotInBackground();
     notifyListeners();
     return trip;
   }
@@ -367,7 +401,9 @@ class TripStore extends ChangeNotifier {
     String email,
     TripPermission permission,
   ) async {
-    return _tripService.inviteMemberByEmail(tripId, email, permission);
+    return _withSessionGuardNoRetry(
+      () => _tripService.inviteMemberByEmail(tripId, email, permission),
+    );
   }
 
   Future<bool> deleteTrip(String tripId) async {
@@ -377,13 +413,15 @@ class TripStore extends ChangeNotifier {
       return false;
     }
 
-    final deleted = await _tripService.deleteOwnedTrip(tripId);
+    final deleted =
+        await _withSessionGuard(() => _tripService.deleteOwnedTrip(tripId));
     if (!deleted) {
       return false;
     }
 
     _trips.removeAt(index);
     await NotificationService.instance.cancelTripReminders(tripId);
+    _persistSnapshotInBackground();
     notifyListeners();
     return true;
   }
@@ -395,13 +433,15 @@ class TripStore extends ChangeNotifier {
       return false;
     }
 
-    final left = await _tripService.leaveSharedTrip(tripId);
+    final left =
+        await _withSessionGuard(() => _tripService.leaveSharedTrip(tripId));
     if (!left) {
       return false;
     }
 
     _trips.removeAt(index);
     await NotificationService.instance.cancelTripReminders(tripId);
+    _persistSnapshotInBackground();
     notifyListeners();
     return true;
   }
@@ -414,15 +454,17 @@ class TripStore extends ChangeNotifier {
       return false;
     }
 
-    await _tripService.updateTripColor(tripId, color);
+    await _withSessionGuard(() => _tripService.updateTripColor(tripId, color));
     _trips[index] = _trips[index].copyWith(color: color);
+    _persistSnapshotInBackground();
     notifyListeners();
     return true;
   }
 
   /// Fetch the member list for [tripId] (owner-only operation).
   Future<List<TripMember>> fetchTripMembers(String tripId) async {
-    final members = await _tripService.fetchTripMembers(tripId);
+    final members =
+        await _withSessionGuard(() => _tripService.fetchTripMembers(tripId));
     _membersByTripId[tripId] = members;
     return members;
   }
@@ -435,7 +477,9 @@ class TripStore extends ChangeNotifier {
     String userId,
     TripPermission permission,
   ) async {
-    await _tripService.updateMemberPermission(tripId, userId, permission);
+    await _withSessionGuard(
+      () => _tripService.updateMemberPermission(tripId, userId, permission),
+    );
     final members = _membersByTripId[tripId];
     if (members != null) {
       _membersByTripId[tripId] = [
@@ -448,7 +492,7 @@ class TripStore extends ChangeNotifier {
 
   /// Remove a member from the trip (owner-only).
   Future<void> removeMember(String tripId, String userId) async {
-    await _tripService.removeMember(tripId, userId);
+    await _withSessionGuard(() => _tripService.removeMember(tripId, userId));
     final members = _membersByTripId[tripId];
     if (members != null) {
       _membersByTripId[tripId] =
@@ -466,7 +510,10 @@ class TripStore extends ChangeNotifier {
     _loadFuture = null;
     _isLoading = false;
     _isInitialized = false;
+    _hasCachedData = false;
+    _lastSyncedAt = null;
     _loadError = null;
+    _cacheUserId = null;
     notifyListeners();
   }
 
@@ -479,14 +526,22 @@ class TripStore extends ChangeNotifier {
   /// discard its results rather than repopulating the store.
   Future<void> clearForSignOut() async {
     _sessionToken++; // synchronous – happens before any await
+    final userIdToClear =
+        _cacheUserId ?? Supabase.instance.client.auth.currentUser?.id;
     await _realtimeService.unsubscribe();
+    if (userIdToClear != null) {
+      await _snapshotCache.clearForUser(userIdToClear);
+    }
     _trips.clear();
     _membersByTripId.clear();
     NotificationService.instance.clearTrackedReminders();
     _loadFuture = null;
     _isLoading = false;
     _isInitialized = false;
+    _hasCachedData = false;
+    _lastSyncedAt = null;
     _loadError = null;
+    _cacheUserId = null;
     notifyListeners();
   }
 
@@ -505,19 +560,58 @@ class TripStore extends ChangeNotifier {
     super.dispose();
   }
 
-  Future<void> _loadTrips() async {
+  Future<void> _loadTrips({required bool loadCacheFirst}) async {
     // Capture the session token at the start.  If clearForSignOut() is called
     // while this load is in-flight, the token will be incremented and we will
     // discard the stale results rather than repopulating the store.
     final token = _sessionToken;
-
-    _isLoading = true;
-    if (!_isInitialized) {
+    Session? session;
+    try {
+      session = Supabase.instance.client.auth.currentSession;
+    } catch (error) {
+      _loadError = error;
+      _isInitialized = true;
+      _isLoading = false;
+      _loadFuture = null;
       notifyListeners();
+      return;
+    }
+    var userId = session?.user.id;
+    if (userId == null || userId.isEmpty) {
+      await _handleExpiredSession();
+      return;
+    }
+    if (session!.isExpired &&
+        !await SupabaseSessionGuard.refreshCurrentSessionIfExpired()) {
+      _cacheUserId = userId;
+      await _handleExpiredSession();
+      return;
+    }
+    session = Supabase.instance.client.auth.currentSession;
+    if (session == null || session.isExpired) {
+      _cacheUserId = userId;
+      await _handleExpiredSession();
+      return;
+    }
+    userId = session.user.id;
+    if (userId.isEmpty) {
+      await _handleExpiredSession();
+      return;
+    }
+    _cacheUserId = userId;
+
+    if (loadCacheFirst && !_isInitialized && _trips.isEmpty) {
+      await _loadCachedSnapshot(userId: userId, token: token);
+      if (_sessionToken != token) return;
     }
 
+    _isLoading = true;
+    notifyListeners();
+
     try {
-      final loadedTrips = await _tripService.fetchTripsForCurrentUser();
+      final loadedTrips = await _withSessionGuard(
+        _tripService.fetchTripsForCurrentUser,
+      );
 
       // If the session changed while we were waiting, discard results.
       if (_sessionToken != token) return;
@@ -527,12 +621,17 @@ class TripStore extends ChangeNotifier {
         ..addAll(loadedTrips);
       _loadError = null;
       _isInitialized = true;
+      _hasCachedData = false;
       NotificationService.instance.clearTrackedReminders();
       for (final trip in _trips) {
         await NotificationService.instance.scheduleTripReminders(trip);
       }
       // Guard again: reminders scheduling is also async.
       if (_sessionToken != token) return;
+
+      final syncedAt = DateTime.now();
+      await _snapshotCache.saveForUser(userId, _trips, savedAt: syncedAt);
+      _lastSyncedAt = syncedAt;
 
       // Subscribe to Realtime for permission/removal changes.
       await _realtimeService.subscribe(
@@ -544,6 +643,10 @@ class TripStore extends ChangeNotifier {
       if (_sessionToken != token) return;
     } catch (error) {
       if (_sessionToken != token) return;
+      if (SupabaseSessionGuard.isSessionExpiredError(error)) {
+        await _handleExpiredSession();
+        return;
+      }
       _loadError = error;
       _isInitialized = true;
     } finally {
@@ -555,10 +658,111 @@ class TripStore extends ChangeNotifier {
     }
   }
 
+  Future<void> _loadCachedSnapshot({
+    required String userId,
+    required int token,
+  }) async {
+    final snapshot = await _snapshotCache.loadForUser(userId);
+    if (_sessionToken != token || snapshot == null) {
+      return;
+    }
+
+    _trips
+      ..clear()
+      ..addAll(snapshot.trips);
+    _isInitialized = true;
+    _hasCachedData = true;
+    _lastSyncedAt = snapshot.savedAt;
+    _loadError = null;
+    notifyListeners();
+  }
+
+  void _persistSnapshotInBackground() {
+    String? userId = _cacheUserId;
+    if (userId == null || userId.isEmpty) {
+      try {
+        userId = Supabase.instance.client.auth.currentUser?.id;
+      } catch (_) {
+        return;
+      }
+    }
+    if (userId == null || userId.isEmpty) {
+      return;
+    }
+
+    final tripsSnapshot = List<TripSummary>.unmodifiable(_trips);
+    final savedAt = DateTime.now();
+    _lastSyncedAt = savedAt;
+    _hasCachedData = false;
+    unawaited(
+      _snapshotCache
+          .saveForUser(userId, tripsSnapshot, savedAt: savedAt)
+          .catchError((Object error, StackTrace stackTrace) {
+        debugPrint('Failed to persist trip snapshot: $error');
+      }),
+    );
+  }
+
+  Future<T> _withSessionGuard<T>(Future<T> Function() action) async {
+    try {
+      return await action();
+    } catch (error) {
+      if (!SupabaseSessionGuard.isSessionExpiredError(error)) {
+        rethrow;
+      }
+      if (await SupabaseSessionGuard.refreshCurrentSessionIfExpired(
+        forceRefresh: true,
+      )) {
+        try {
+          return await action();
+        } catch (retryError, retryStackTrace) {
+          if (SupabaseSessionGuard.isSessionExpiredError(retryError)) {
+            await _handleExpiredSession();
+          }
+          Error.throwWithStackTrace(retryError, retryStackTrace);
+        }
+      }
+      await _handleExpiredSession();
+      rethrow;
+    }
+  }
+
+  Future<T> _withSessionGuardNoRetry<T>(Future<T> Function() action) async {
+    try {
+      return await action();
+    } catch (error) {
+      if (!SupabaseSessionGuard.isSessionExpiredError(error)) {
+        rethrow;
+      }
+      if (!await SupabaseSessionGuard.refreshCurrentSessionIfExpired(
+        forceRefresh: true,
+      )) {
+        await _handleExpiredSession();
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _handleExpiredSession() async {
+    final userId =
+        _cacheUserId ?? Supabase.instance.client.auth.currentUser?.id;
+    try {
+      await Supabase.instance.client.auth.signOut();
+    } catch (error) {
+      debugPrint('Failed to sign out after expired session: $error');
+    }
+
+    await clearForSignOut();
+    if (userId != null && userId != _cacheUserId) {
+      await _snapshotCache.clearForUser(userId);
+    }
+  }
+
   void _onPermissionChanged(String tripId, TripPermission permission) {
     final index = _trips.indexWhere((t) => t.id == tripId);
     if (index == -1) return;
     _trips[index] = _trips[index].copyWith(permission: permission);
+    _persistSnapshotInBackground();
     notifyListeners();
   }
 
@@ -568,6 +772,7 @@ class TripStore extends ChangeNotifier {
     _trips.removeAt(index);
     _membersByTripId.remove(tripId);
     NotificationService.instance.cancelTripReminders(tripId);
+    _persistSnapshotInBackground();
     notifyListeners();
   }
 
@@ -576,9 +781,11 @@ class TripStore extends ChangeNotifier {
   }
 
   Future<StopItem> _saveStop(String dayId, StopItem stop) async {
-    final createdStop = await _stopService.createStop(
-      dayId: dayId,
-      stop: stop.copyWith(id: null, parkingSpots: const []),
+    final createdStop = await _withSessionGuardNoRetry(
+      () => _stopService.createStop(
+        dayId: dayId,
+        stop: stop.copyWith(id: null, parkingSpots: const []),
+      ),
     );
     final parkingSpots = await _syncParkingSpots(
       stopId: createdStop.id!,
@@ -600,8 +807,9 @@ class TripStore extends ChangeNotifier {
       throw StateError('Stop id is required for update.');
     }
 
-    final updatedStop =
-        await _stopService.updateStop(next.copyWith(parkingSpots: const []));
+    final updatedStop = await _withSessionGuard(
+      () => _stopService.updateStop(next.copyWith(parkingSpots: const [])),
+    );
     final parkingSpots = await _syncParkingSpots(
       stopId: next.id!,
       previous: previous.parkingSpots,
@@ -627,13 +835,16 @@ class TripStore extends ChangeNotifier {
     final saved = await Future.wait(
       normalized.map((parkingSpot) async {
         if (parkingSpot.id != null && previousIds.contains(parkingSpot.id)) {
-          final updated =
-              await _parkingSpotService.updateParkingSpot(parkingSpot);
+          final updated = await _withSessionGuard(
+            () => _parkingSpotService.updateParkingSpot(parkingSpot),
+          );
           return updated.copyWith(sortOrder: parkingSpot.sortOrder);
         } else {
-          final created = await _parkingSpotService.createParkingSpot(
-            stopId: stopId,
-            parkingSpot: parkingSpot.copyWith(id: null),
+          final created = await _withSessionGuardNoRetry(
+            () => _parkingSpotService.createParkingSpot(
+              stopId: stopId,
+              parkingSpot: parkingSpot.copyWith(id: null),
+            ),
           );
           return created.copyWith(sortOrder: parkingSpot.sortOrder);
         }
@@ -645,11 +856,17 @@ class TripStore extends ChangeNotifier {
     await Future.wait([
       for (final removed in previous)
         if (removed.id != null && !savedIds.contains(removed.id))
-          _parkingSpotService.deleteParkingSpot(removed.id!),
+          _withSessionGuard(
+            () => _parkingSpotService.deleteParkingSpot(removed.id!),
+          ),
     ]);
 
-    await _parkingSpotService.reorderParkingSpots(
-        stopId: stopId, parkingSpots: saved);
+    await _withSessionGuard(
+      () => _parkingSpotService.reorderParkingSpots(
+        stopId: stopId,
+        parkingSpots: saved,
+      ),
+    );
     return saved;
   }
 

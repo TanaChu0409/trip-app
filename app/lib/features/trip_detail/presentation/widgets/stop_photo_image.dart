@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:trip_planner_app/features/auth/data/session_expiry_handler.dart';
 import 'package:trip_planner_app/features/trip_detail/data/stop_photo_service.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 
@@ -40,8 +41,13 @@ class _StopPhotoImageState extends State<StopPhotoImage> {
     }
   }
 
-  Future<StopPhoto> _resolvePhoto() {
-    return _photoService.ensureActiveUrl(widget.photo);
+  Future<StopPhoto> _resolvePhoto() async {
+    try {
+      return await _photoService.ensureActiveUrl(widget.photo);
+    } catch (error) {
+      await SessionExpiryHandler.signOutIfSessionExpired(error);
+      rethrow;
+    }
   }
 
   @override
