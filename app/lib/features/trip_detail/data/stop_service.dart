@@ -12,11 +12,10 @@ class StopService {
     required String dayId,
     required StopItem stop,
   }) async {
-    final data = await _client
-        .from('stops')
-        .insert({...stop.toJson(), 'day_id': dayId})
-        .select()
-        .single();
+    final data = await _client.rpc(
+      'create_stop_with_palette',
+      params: {'p_day_id': dayId, 'p_stop': stop.toJson()},
+    );
 
     return StopItem.fromJson(Map<String, dynamic>.from(data));
   }
@@ -27,12 +26,10 @@ class StopService {
       throw ArgumentError('Stop id is required for update.');
     }
 
-    final data = await _client
-        .from('stops')
-        .update(stop.toJson())
-        .eq('id', stopId)
-        .select()
-        .single();
+    final data = await _client.rpc(
+      'update_stop_with_palette',
+      params: {'p_stop_id': stopId, 'p_stop': stop.toJson()},
+    );
 
     return StopItem.fromJson(Map<String, dynamic>.from(data));
   }

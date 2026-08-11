@@ -44,6 +44,23 @@ void main() {
     expect(updated.title, '測試旅程');
   });
 
+  test('trip summary cache roundtrip preserves custom stop colours', () {
+    const trip = TripSummary(
+      id: 'trip-1',
+      title: '測試旅程',
+      dateRange: '2026/05/01 - 2026/05/02',
+      role: TripRole.owner,
+      days: [],
+      customStopColors: ['#123456', '#ABCDEF'],
+    );
+
+    final restored = TripSummary.fromCacheJson(trip.toCacheJson());
+
+    expect(restored.customStopColors, ['#123456', '#ABCDEF']);
+    expect(trip.copyWith(customStopColors: const ['#654321']).customStopColors,
+        ['#654321']);
+  });
+
   test('trip summary stop count aggregates nested stops', () {
     const trip = TripSummary(
       id: 'trip-1',

@@ -21,6 +21,7 @@ void main() {
       role: TripRole.owner,
       shareCode: 'ABCD12',
       color: '#0F766E',
+      customStopColors: const ['#123456'],
       days: [
         TripDay(
           id: 'day-1',
@@ -73,6 +74,7 @@ void main() {
     expect(snapshot!.savedAt, DateTime.utc(2026, 6, 1, 8));
     expect(snapshot.trips.single.title, '台南兩天一夜');
     expect(snapshot.trips.single.days.single.stops.single.timeLabel, '08:05');
+    expect(snapshot.trips.single.customStopColors, ['#123456']);
     expect(
       snapshot.trips.single.days.single.stops.single.photos.single.storagePath,
       'user/trip/stop/photo.jpg',

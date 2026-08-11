@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:trip_planner_app/core/supabase/supabase_session_guard.dart';
+import 'package:trip_planner_app/core/theme/app_theme.dart';
 import 'package:trip_planner_app/features/notifications/services/notification_service.dart';
 import 'package:trip_planner_app/features/trip_detail/data/parking_spot_service.dart';
 import 'package:trip_planner_app/features/trip_detail/data/stop_service.dart';
@@ -119,11 +120,12 @@ class TripStore extends ChangeNotifier {
         _normalizeStopDraft(stop, sortOrder: location.day.stops.length);
     final savedStop = await _saveStop(location.day.id, draft);
     final updatedStops = _normalizeStops([...location.day.stops, savedStop]);
-    final updatedTrip = _replaceDayAt(
+    var updatedTrip = _replaceDayAt(
       location.trip,
       location.dayIndex,
       location.day.copyWith(stops: updatedStops),
     );
+    updatedTrip = _withSavedCustomStopColor(updatedTrip, savedStop.color);
 
     _trips[location.tripIndex] = updatedTrip;
     await _withSessionGuard(
@@ -170,11 +172,14 @@ class TripStore extends ChangeNotifier {
     final updatedStops = existingStop.timeLabel == savedStop.timeLabel
         ? _normalizeStopsInCurrentOrder(nextStops)
         : _normalizeStops(nextStops);
-    final updatedTrip = _replaceDayAt(
+    var updatedTrip = _replaceDayAt(
       location.trip,
       location.dayIndex,
       location.day.copyWith(stops: updatedStops),
     );
+    if (savedStop.color != existingStop.color) {
+      updatedTrip = _withSavedCustomStopColor(updatedTrip, savedStop.color);
+    }
 
     _trips[location.tripIndex] = updatedTrip;
     await _withSessionGuard(
@@ -459,6 +464,33 @@ class TripStore extends ChangeNotifier {
     _persistSnapshotInBackground();
     notifyListeners();
     return true;
+  }
+
+  Future<bool> removeCustomStopColor(String tripId, String color) async {
+    final index = _trips.indexWhere(
+      (trip) => trip.id == tripId && trip.canEdit,
+    );
+    if (index == -1) return false;
+    await _withSessionGuard(
+      () => _tripService.removeCustomStopColor(tripId, color),
+    );
+    final current = _trips[index];
+    _trips[index] = current.copyWith(
+      customStopColors: current.customStopColors
+          .where((item) => item != color)
+          .toList(growable: false),
+    );
+    _persistSnapshotInBackground();
+    notifyListeners();
+    return true;
+  }
+
+  TripSummary _withSavedCustomStopColor(TripSummary trip, String? color) {
+    if (color == null || TripColors.presets.any((item) => item.hex == color)) {
+      return trip;
+    }
+    if (trip.customStopColors.contains(color)) return trip;
+    return trip.copyWith(customStopColors: [...trip.customStopColors, color]);
   }
 
   /// Fetch the member list for [tripId] (owner-only operation).

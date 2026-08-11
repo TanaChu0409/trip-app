@@ -12,6 +12,8 @@ class TripColorPicker extends StatelessWidget {
     this.description = '可隨時在旅程內更改顏色。',
     this.showDefaultOption = false,
     this.defaultLabel = '使用旅程顏色',
+    this.savedCustomColors = const [],
+    this.onRemoveSavedCustomColor,
   });
 
   final String? selectedColor;
@@ -20,6 +22,8 @@ class TripColorPicker extends StatelessWidget {
   final String description;
   final bool showDefaultOption;
   final String defaultLabel;
+  final List<String> savedCustomColors;
+  final Future<void> Function(String color)? onRemoveSavedCustomColor;
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +60,15 @@ class TripColorPicker extends StatelessWidget {
                 isSelected: option.hex == selectedHex,
                 onTap: () => onColorChanged(option.hex),
               ),
+            for (final color in savedCustomColors)
+              _SavedCustomColorOption(
+                color: color,
+                isSelected: color == selectedColor,
+                onTap: () => onColorChanged(color),
+                onRemove: onRemoveSavedCustomColor == null
+                    ? null
+                    : () => _confirmRemoveSavedColor(context, color),
+              ),
             _CustomColorOption(
               isSelected: isCustom,
               customColor: isCustom ? colorFromHex(selectedColor) : null,
@@ -65,6 +78,21 @@ class TripColorPicker extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _confirmRemoveSavedColor(BuildContext context, String color) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('移除旅行色票？'),
+        content: Text('$color 將不再供這趟旅行的新地點選用；已使用此顏色的地點不會改變。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('移除')),
+        ],
+      ),
+    );
+    if (confirmed == true) await onRemoveSavedCustomColor?.call(color);
   }
 
   Future<void> _showColorPickerDialog(BuildContext context) async {
@@ -200,6 +228,75 @@ class TripColorPicker extends StatelessWidget {
       hexController.dispose();
     }
   }
+}
+
+class _SavedCustomColorOption extends StatelessWidget {
+  const _SavedCustomColorOption({
+    required this.color,
+    required this.isSelected,
+    required this.onTap,
+    this.onRemove,
+  });
+
+  final String color;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayColor = colorFromHex(color);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              _ColorCircle(color: displayColor, isSelected: isSelected),
+              if (onRemove != null)
+                Positioned(
+                  right: -7,
+                  top: -7,
+                  child: InkWell(
+                    onTap: onRemove,
+                    customBorder: const CircleBorder(),
+                    child: const CircleAvatar(
+                      radius: 10,
+                      backgroundColor: AppColors.text,
+                      child: Icon(Icons.close_rounded, size: 13, color: Colors.white),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(color, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ColorCircle extends StatelessWidget {
+  const _ColorCircle({required this.color, required this.isSelected});
+  final Color color;
+  final bool isSelected;
+  @override
+  Widget build(BuildContext context) => AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(color: isSelected ? AppColors.text : Colors.white, width: isSelected ? 3 : 1),
+          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.28), blurRadius: isSelected ? 14 : 8, offset: const Offset(0, 4))],
+        ),
+        child: isSelected ? Icon(Icons.check_rounded, color: onAccentColor(color)) : null,
+      );
 }
 
 class _ColorPickerResult {
