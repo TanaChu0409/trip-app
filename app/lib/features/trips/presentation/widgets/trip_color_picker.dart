@@ -29,7 +29,8 @@ class TripColorPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final selectedHex = selectedColor ?? TripColors.defaultHex;
     final isCustom = selectedColor != null &&
-        !TripColors.presets.any((p) => p.hex == selectedColor);
+        !TripColors.presets.any((p) => p.hex == selectedColor) &&
+        !savedCustomColors.contains(selectedColor);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
