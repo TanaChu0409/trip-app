@@ -27,7 +27,8 @@ class TripColorPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selectedHex = selectedColor ?? TripColors.defaultHex;
+    final selectedHex = selectedColor ??
+        (showDefaultOption ? null : TripColors.defaultHex);
     final isCustom = selectedColor != null &&
         !TripColors.presets.any((p) => p.hex == selectedColor) &&
         !savedCustomColors.contains(selectedColor);

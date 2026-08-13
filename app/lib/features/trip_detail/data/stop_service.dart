@@ -15,7 +15,7 @@ class StopService {
     final data = await _client.rpc(
       'create_stop_with_palette',
       params: {'p_day_id': dayId, 'p_stop': stop.toJson()},
-    );
+    ).single();
 
     return StopItem.fromJson(Map<String, dynamic>.from(data));
   }
@@ -29,7 +29,7 @@ class StopService {
     final data = await _client.rpc(
       'update_stop_with_palette',
       params: {'p_stop_id': stopId, 'p_stop': stop.toJson()},
-    );
+    ).single();
 
     return StopItem.fromJson(Map<String, dynamic>.from(data));
   }
