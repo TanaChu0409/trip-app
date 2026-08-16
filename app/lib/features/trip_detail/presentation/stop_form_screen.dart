@@ -239,6 +239,29 @@ class _StopFormScreenState extends State<StopFormScreen> {
                         selectedColor: _selectedColor,
                         showDefaultOption: true,
                         defaultLabel: '沿用旅程顏色',
+                        savedCustomColors: trip.customStopColors,
+                        onRemoveSavedCustomColor: (color) async {
+                          try {
+                            final removed =
+                                await _tripStore.removeCustomStopColor(
+                              widget.tripId,
+                              color,
+                            );
+                            if (!mounted) return;
+                            if (removed) {
+                              setState(() {});
+                              return;
+                            }
+                            showAppSnackBar(
+                              const SnackBar(content: Text('移除旅行色票失敗')),
+                            );
+                          } catch (error) {
+                            if (!mounted) return;
+                            showAppSnackBar(
+                              SnackBar(content: Text('移除旅行色票失敗：$error')),
+                            );
+                          }
+                        },
                         onColorChanged: (value) =>
                             setState(() => _selectedColor = value),
                       ),

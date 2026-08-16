@@ -334,6 +334,7 @@ class TripSummary {
     this.shareCode,
     this.sharedFromTripId,
     this.color,
+    this.customStopColors = const [],
     this.permission,
   });
 
@@ -345,6 +346,7 @@ class TripSummary {
   final String? shareCode;
   final String? sharedFromTripId;
   final String? color;
+  final List<String> customStopColors;
 
   /// Permission for guests. `null` when [role] is [TripRole.owner].
   final TripPermission? permission;
@@ -365,6 +367,7 @@ class TripSummary {
     String? shareCode,
     String? sharedFromTripId,
     String? color,
+    List<String>? customStopColors,
     TripPermission? permission,
   }) {
     return TripSummary(
@@ -376,6 +379,7 @@ class TripSummary {
       shareCode: shareCode ?? this.shareCode,
       sharedFromTripId: sharedFromTripId ?? this.sharedFromTripId,
       color: color ?? this.color,
+      customStopColors: customStopColors ?? this.customStopColors,
       permission: permission ?? this.permission,
     );
   }
@@ -394,6 +398,7 @@ class TripSummary {
       'share_code': shareCode,
       'shared_from_trip_id': sharedFromTripId,
       'color': color,
+      'custom_stop_colors': customStopColors,
       'permission': permission?.name,
     };
   }
@@ -416,6 +421,7 @@ class TripSummary {
       shareCode: json['share_code'] as String?,
       sharedFromTripId: json['shared_from_trip_id'] as String?,
       color: json['color'] as String?,
+      customStopColors: _stringList(json['custom_stop_colors']),
       permission: _tripPermissionFromCache(json['permission'] as String?),
     );
   }
@@ -506,6 +512,13 @@ List<Map<String, dynamic>> _jsonMapList(Object? value) {
     for (final item in value)
       if (item is Map) Map<String, dynamic>.from(item),
   ];
+}
+
+List<String> _stringList(Object? value) {
+  if (value is! List) return const [];
+  return List<String>.unmodifiable(
+    value.whereType<String>().toList(growable: false),
+  );
 }
 
 TripRole? _tripRoleFromCache(String? value) {

@@ -15,7 +15,7 @@ class TripService {
     final userId = _requireUserId();
     final ownedRows = await _client
         .from('trips')
-        .select('id, title, start_date, end_date, share_code, color')
+        .select('id, title, start_date, end_date, share_code, color, custom_stop_colors')
         .eq('owner_id', userId)
         .eq('is_archived', false)
         .order('start_date', ascending: false);
@@ -37,7 +37,7 @@ class TripService {
         ? const <dynamic>[]
         : await _client
             .from('trips')
-            .select('id, title, start_date, end_date, share_code, color')
+            .select('id, title, start_date, end_date, share_code, color, custom_stop_colors')
             .inFilter('id', sharedTripIds)
             .eq('is_archived', false)
             .order('start_date', ascending: false);
@@ -69,7 +69,7 @@ class TripService {
           'owner_id': userId,
           'color': color,
         })
-        .select('id, title, start_date, end_date, share_code, color')
+        .select('id, title, start_date, end_date, share_code, color, custom_stop_colors')
         .single();
 
     final tripId = tripRow['id'] as String;
@@ -93,7 +93,7 @@ class TripService {
   }) async {
     final rows = await _client
         .from('trips')
-        .select('id, title, start_date, end_date, share_code, owner_id, color')
+        .select('id, title, start_date, end_date, share_code, owner_id, color, custom_stop_colors')
         .eq('id', tripId)
         .limit(1);
 
@@ -167,6 +167,13 @@ class TripService {
     // overwrite any field (including owner_id), which the RPC prevents.
     await _client.rpc(
       'update_trip_color',
+      params: {'p_trip_id': tripId, 'p_color': color},
+    );
+  }
+
+  Future<void> removeCustomStopColor(String tripId, String color) {
+    return _client.rpc(
+      'remove_trip_custom_stop_color',
       params: {'p_trip_id': tripId, 'p_color': color},
     );
   }
@@ -307,11 +314,16 @@ class TripService {
             days: daysByTripId[row['id'] as String] ?? const [],
             shareCode: row['share_code'] as String?,
             color: row['color'] as String?,
+            customStopColors: _stringList(row['custom_stop_colors']),
             permission: permissionByTripId[row['id'] as String],
           ),
         )
         .toList(growable: false);
   }
+
+  List<String> _stringList(Object? value) => value is List
+      ? value.whereType<String>().toList(growable: false)
+      : const [];
 
   Future<List<Map<String, dynamic>>> _fetchDays(List<String> tripIds) async {
     if (tripIds.isEmpty) {
