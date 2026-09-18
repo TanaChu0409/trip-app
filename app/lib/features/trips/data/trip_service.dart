@@ -11,13 +11,16 @@ class TripService {
 
   SupabaseClient get _client => Supabase.instance.client;
 
-  Future<List<TripSummary>> fetchTripsForCurrentUser() async {
+  Future<List<TripSummary>> fetchTripsForCurrentUser({
+    required bool isArchived,
+  }) async {
     final userId = _requireUserId();
     final ownedRows = await _client
         .from('trips')
         .select(
             'id, title, start_date, end_date, share_code, color, custom_stop_colors, is_archived')
         .eq('owner_id', userId)
+        .eq('is_archived', isArchived)
         .order('start_date', ascending: false);
 
     final sharedAccessRows = await _client
@@ -40,6 +43,7 @@ class TripService {
             .select(
                 'id, title, start_date, end_date, share_code, color, custom_stop_colors, is_archived')
             .inFilter('id', sharedTripIds)
+            .eq('is_archived', isArchived)
             .order('start_date', ascending: false);
 
     final ownedTrips =

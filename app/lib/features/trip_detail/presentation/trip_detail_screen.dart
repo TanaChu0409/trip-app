@@ -9,9 +9,14 @@ import 'package:trip_planner_app/features/trips/data/trip_store.dart';
 import 'package:trip_planner_app/features/trips/presentation/widgets/trip_color_picker.dart';
 
 class TripDetailScreen extends StatefulWidget {
-  const TripDetailScreen({super.key, required this.tripId});
+  const TripDetailScreen({
+    super.key,
+    required this.tripId,
+    this.loadArchivedTrip = false,
+  });
 
   final String tripId;
+  final bool loadArchivedTrip;
 
   @override
   State<TripDetailScreen> createState() => _TripDetailScreenState();
@@ -40,7 +45,11 @@ class _TripDetailScreenState extends State<TripDetailScreen>
     _tabController = TabController(length: initialDayCount, vsync: this);
     _tabController.addListener(_handleTabChanged);
     _tripStore.addListener(_handleStoreChanged);
-    _tripStore.ensureLoaded();
+    if (widget.loadArchivedTrip) {
+      _tripStore.ensureArchivedTripsLoaded();
+    } else {
+      _tripStore.ensureLoaded();
+    }
   }
 
   @override

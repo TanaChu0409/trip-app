@@ -46,6 +46,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: ':tripId',
                 builder: (context, state) => TripDetailScreen(
                   tripId: state.pathParameters['tripId']!,
+                  loadArchivedTrip: true,
                 ),
               ),
             ],

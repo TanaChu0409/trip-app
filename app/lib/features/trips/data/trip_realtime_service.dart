@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 
@@ -41,6 +43,7 @@ class TripRealtimeService {
     final userId = client.auth.currentUser?.id;
     if (userId == null) return;
 
+    final subscribed = Completer<void>();
     _channel = client
         .channel('shared_access:$userId')
         .onPostgresChanges(
@@ -94,7 +97,23 @@ class TripRealtimeService {
             }
           },
         )
-        .subscribe();
+        .subscribe((status, error) {
+      if (subscribed.isCompleted) return;
+      if (status == RealtimeSubscribeStatus.subscribed) {
+        subscribed.complete();
+        return;
+      }
+      subscribed.completeError(
+        error ?? StateError('Realtime subscription ended: $status'),
+      );
+    });
+
+    try {
+      await subscribed.future.timeout(const Duration(seconds: 10));
+    } catch (_) {
+      await unsubscribe();
+      rethrow;
+    }
   }
 
   Future<void> unsubscribe() async {

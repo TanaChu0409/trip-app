@@ -18,7 +18,7 @@ class _ArchivedTripsScreenState extends State<ArchivedTripsScreen> {
   @override
   void initState() {
     super.initState();
-    _tripStore.ensureLoaded();
+    _tripStore.ensureArchivedTripsLoaded();
   }
 
   @override
@@ -86,10 +86,30 @@ class _ArchivedTripsScreenState extends State<ArchivedTripsScreen> {
 
   Future<void> _handleAction(TripSummary trip, TripCardAction action) async {
     if (action != TripCardAction.leaveTrip) return;
-    final restored = await _tripStore.leaveSharedTrip(trip.id);
+    final shouldLeave = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('退出分享旅程？'),
+            content: Text('退出後，${trip.title} 將從封存旅程中移除。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('確認退出'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!mounted || !shouldLeave) return;
+
+    final left = await _tripStore.leaveSharedTrip(trip.id);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(restored ? '已退出旅程：${trip.title}' : '退出旅程失敗')),
+      SnackBar(content: Text(left ? '已退出旅程：${trip.title}' : '退出旅程失敗')),
     );
   }
 }
