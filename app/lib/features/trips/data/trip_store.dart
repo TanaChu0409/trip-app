@@ -52,6 +52,11 @@ class TripStore extends ChangeNotifier {
   /// load).
   int _sessionToken = 0;
 
+  /// Generation of the active-trip snapshot request. An archived request
+  /// captures this after its active prerequisite completes, so an older
+  /// archived response cannot overwrite a newer active refresh.
+  int _activeLoadGeneration = 0;
+
   List<TripSummary> get trips => List<TripSummary>.unmodifiable(_trips);
   List<TripSummary> get activeTrips => List<TripSummary>.unmodifiable(
         _trips.where((trip) => !trip.isArchived),
@@ -677,6 +682,7 @@ class TripStore extends ChangeNotifier {
     // while this load is in-flight, the token will be incremented and we will
     // discard the stale results rather than repopulating the store.
     final token = _sessionToken;
+    _activeLoadGeneration++;
     Session? session;
     try {
       session = Supabase.instance.client.auth.currentSession;
@@ -804,10 +810,18 @@ class TripStore extends ChangeNotifier {
       await ensureLoaded();
       if (_sessionToken != token || !_isInitialized) return;
 
+      // The archived subset can only replace the in-memory active subset if
+      // no newer active refresh has begun since this request's prerequisite
+      // active load completed.
+      final activeLoadGeneration = _activeLoadGeneration;
+
       final loadedTrips = await _withSessionGuard(
         () => _tripService.fetchTripsForCurrentUser(isArchived: true),
       );
-      if (_sessionToken != token) return;
+      if (_sessionToken != token ||
+          _activeLoadGeneration != activeLoadGeneration) {
+        return;
+      }
 
       final loadedById = <String, TripSummary>{
         for (final trip in loadedTrips) trip.id: trip,

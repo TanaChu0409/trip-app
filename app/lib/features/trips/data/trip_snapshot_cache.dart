@@ -20,13 +20,39 @@ class TripSnapshotCache {
 
   static const int _schemaVersion = 2;
   static const String _keyPrefix = 'trip_snapshot_v2';
+  static const int _legacySchemaVersion = 1;
+  static const String _legacyKeyPrefix = 'trip_snapshot_v1';
 
   Future<TripSnapshot?> loadForUser(String userId) async {
     final preferences = await SharedPreferences.getInstance();
-    final rawSnapshot = preferences.getString(_keyForUser(userId));
-    if (rawSnapshot == null || rawSnapshot.isEmpty) {
-      return null;
-    }
+    final currentSnapshot = _decodeSnapshot(
+      preferences.getString(_keyForUser(userId)),
+      expectedSchemaVersion: _schemaVersion,
+    );
+    if (currentSnapshot != null) return currentSnapshot;
+
+    // Version 1 contains active trips only. TripSummary defaults a missing
+    // archive flag to false, so its payload is safely compatible with v2.
+    final legacySnapshot = _decodeSnapshot(
+      preferences.getString(_legacyKeyForUser(userId)),
+      expectedSchemaVersion: _legacySchemaVersion,
+    );
+    if (legacySnapshot == null) return null;
+
+    await saveForUser(
+      userId,
+      legacySnapshot.trips,
+      savedAt: legacySnapshot.savedAt,
+    );
+    await preferences.remove(_legacyKeyForUser(userId));
+    return legacySnapshot;
+  }
+
+  TripSnapshot? _decodeSnapshot(
+    String? rawSnapshot, {
+    required int expectedSchemaVersion,
+  }) {
+    if (rawSnapshot == null || rawSnapshot.isEmpty) return null;
 
     try {
       final decoded = jsonDecode(rawSnapshot);
@@ -35,7 +61,7 @@ class TripSnapshotCache {
       }
 
       final json = Map<String, dynamic>.from(decoded);
-      if (json['schema_version'] != _schemaVersion) {
+      if (json['schema_version'] != expectedSchemaVersion) {
         return null;
       }
 
@@ -86,7 +112,9 @@ class TripSnapshotCache {
   Future<void> clearForUser(String userId) async {
     final preferences = await SharedPreferences.getInstance();
     await preferences.remove(_keyForUser(userId));
+    await preferences.remove(_legacyKeyForUser(userId));
   }
 
   String _keyForUser(String userId) => '$_keyPrefix:$userId';
+  String _legacyKeyForUser(String userId) => '$_legacyKeyPrefix:$userId';
 }

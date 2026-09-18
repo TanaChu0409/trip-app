@@ -324,7 +324,16 @@ class _TripDetailScreenState extends State<TripDetailScreen>
         false;
     if (!context.mounted || !confirmed) return;
 
-    final updated = await _tripStore.setTripArchived(trip.id, isArchived);
+    bool updated;
+    try {
+      updated = await _tripStore.setTripArchived(trip.id, isArchived);
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(SupabaseErrorFormatter.userMessage(error))),
+      );
+      return;
+    }
     if (!context.mounted) return;
     if (updated) {
       ScaffoldMessenger.of(context).showSnackBar(
