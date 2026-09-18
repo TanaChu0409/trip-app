@@ -95,7 +95,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                   OutlinedButton.icon(
                     onPressed: () => context.go('/trips/archived'),
                     icon: const Icon(Icons.archive_outlined),
-                    label: Text('封存旅程（${_tripStore.archivedTrips.length}）'),
+                    label: const Text('封存旅程'),
                   ),
                   const SizedBox(height: 24),
                   if (isLoading) ...[

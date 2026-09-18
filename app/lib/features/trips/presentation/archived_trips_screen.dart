@@ -54,13 +54,15 @@ class _ArchivedTripsScreenState extends State<ArchivedTripsScreen> {
                   const SizedBox(height: 8),
                   const Text('封存旅程可完整瀏覽，但不能編輯、邀請成員或使用導航。'),
                   const SizedBox(height: 24),
-                  if (_tripStore.isLoading && trips.isEmpty)
+                  if (_tripStore.isLoadingArchived && trips.isEmpty)
                     const Center(child: CircularProgressIndicator())
-                  else if (_tripStore.loadError != null && trips.isEmpty)
+                  else if (_tripStore.archivedLoadError != null &&
+                      trips.isEmpty)
                     _ArchivedLoadErrorCard(
                       message: SupabaseErrorFormatter.userMessage(
-                          _tripStore.loadError!),
-                      onRetry: _tripStore.reloadTrips,
+                          _tripStore.archivedLoadError!),
+                      onRetry: () =>
+                          _tripStore.ensureArchivedTripsLoaded(force: true),
                     )
                   else if (trips.isEmpty)
                     const _ArchivedEmptyCard()

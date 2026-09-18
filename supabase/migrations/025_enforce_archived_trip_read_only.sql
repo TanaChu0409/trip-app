@@ -74,6 +74,23 @@ $$;
 -- DEFINER functions. This prevents stale clients from modifying archived rows.
 revoke update on public.trips from anon, authenticated;
 
+-- Keep archived trips readable while allowing only active trips to be
+-- deleted.  The archive/restore RPC below is SECURITY DEFINER, so it remains
+-- available without granting general UPDATE access to client roles.
+drop policy if exists "trips_owner_all" on public.trips;
+create policy "trips_owner_read"
+on public.trips
+for select
+using (owner_id = auth.uid());
+create policy "trips_owner_insert"
+on public.trips
+for insert
+with check (owner_id = auth.uid());
+create policy "trips_owner_delete_active"
+on public.trips
+for delete
+using (owner_id = auth.uid() and not is_archived);
+
 create or replace function public.set_owned_trip_archived(
   p_trip_id uuid,
   p_is_archived boolean

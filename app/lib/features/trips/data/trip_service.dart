@@ -109,15 +109,31 @@ class TripService {
 
     final row = Map<String, dynamic>.from(rows.first);
     final resolvedRole = role ?? _resolveRole(row);
-    final permissionMap = (resolvedRole == TripRole.guest && permission != null)
-        ? {tripId: permission}
-        : <String, TripPermission>{};
+    final resolvedPermission = permission ??
+        (resolvedRole == TripRole.guest
+            ? await _fetchCurrentUserPermission(tripId)
+            : null);
+    final permissionMap = resolvedPermission == null
+        ? <String, TripPermission>{}
+        : {tripId: resolvedPermission};
     final trips = await _assembleTrips(
       rows: [row],
       role: resolvedRole,
       permissionByTripId: permissionMap,
     );
     return trips.isEmpty ? null : trips.first;
+  }
+
+  Future<TripPermission?> _fetchCurrentUserPermission(String tripId) async {
+    final userId = _requireUserId();
+    final rows = await _client
+        .from('shared_access')
+        .select('permission')
+        .eq('trip_id', tripId)
+        .eq('user_id', userId)
+        .limit(1);
+    if (rows.isEmpty) return null;
+    return tripPermissionFromBackend(rows.first['permission'] as String?);
   }
 
   /// Invite a user to a trip by their email address (owner-only).
