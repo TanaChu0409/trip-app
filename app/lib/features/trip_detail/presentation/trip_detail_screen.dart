@@ -33,12 +33,14 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   // Cached trip reference – rebuilt only when this specific trip changes.
   TripSummary? _currentTrip;
   bool _isStoreLoading = false;
+  Object? _storeLoadError;
 
   @override
   void initState() {
     super.initState();
     _currentTrip = _tripStore.findById(widget.tripId);
-    _isStoreLoading = _tripStore.isLoading;
+    _isStoreLoading = _isRelevantStoreLoading;
+    _storeLoadError = _relevantLoadError;
     final initialDayCount = _currentTrip == null || _currentTrip!.days.isEmpty
         ? 1
         : _currentTrip!.days.length;
@@ -66,18 +68,30 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   void _handleStoreChanged() {
     if (!mounted) return;
     final newTrip = _tripStore.findById(widget.tripId);
-    final newLoading = _tripStore.isLoading;
-    if (identical(_currentTrip, newTrip) && _isStoreLoading == newLoading) {
+    final newLoading = _isRelevantStoreLoading;
+    final newError = _relevantLoadError;
+    if (identical(_currentTrip, newTrip) &&
+        _isStoreLoading == newLoading &&
+        identical(_storeLoadError, newError)) {
       return;
     }
     setState(() {
       _currentTrip = newTrip;
       _isStoreLoading = newLoading;
+      _storeLoadError = newError;
       if (newTrip != null) {
         _syncTabController(newTrip.days.isEmpty ? 1 : newTrip.days.length);
       }
     });
   }
+
+  bool get _isRelevantStoreLoading => widget.loadArchivedTrip
+      ? _tripStore.isLoadingArchived
+      : _tripStore.isLoading;
+
+  Object? get _relevantLoadError => widget.loadArchivedTrip
+      ? _tripStore.archivedLoadError
+      : _tripStore.loadError;
 
   void _syncTabController(int nextLength) {
     if (_tabController.length == nextLength) {
@@ -123,6 +137,29 @@ class _TripDetailScreenState extends State<TripDetailScreen>
     if (_isStoreLoading && trip == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (trip == null && widget.loadArchivedTrip && _storeLoadError != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('封存旅程載入失敗'),
+                const SizedBox(height: 8),
+                Text(SupabaseErrorFormatter.userMessage(_storeLoadError!)),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () =>
+                      _tripStore.ensureArchivedTripsLoaded(force: true),
+                  child: const Text('重新載入'),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
     if (trip == null) {

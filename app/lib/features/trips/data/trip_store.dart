@@ -39,6 +39,8 @@ class TripStore extends ChangeNotifier {
   Object? _archivedLoadError;
   String? _cacheUserId;
   final Map<String, bool> _archiveStatesReceivedWhileLoading = {};
+  final Map<String, TripPermission> _permissionChangesReceivedWhileLoading = {};
+  final Set<String> _removedTripIdsReceivedWhileLoading = {};
 
   /// Monotonically-increasing token that is incremented each time
   /// [clearForSignOut] is called.  [_loadTrips] captures the value at the
@@ -593,6 +595,8 @@ class TripStore extends ChangeNotifier {
     _trips.clear();
     _membersByTripId.clear();
     _archiveStatesReceivedWhileLoading.clear();
+    _permissionChangesReceivedWhileLoading.clear();
+    _removedTripIdsReceivedWhileLoading.clear();
     NotificationService.instance.resetForTests();
     _realtimeService.unsubscribe();
     _loadFuture = null;
@@ -627,6 +631,8 @@ class TripStore extends ChangeNotifier {
     _trips.clear();
     _membersByTripId.clear();
     _archiveStatesReceivedWhileLoading.clear();
+    _permissionChangesReceivedWhileLoading.clear();
+    _removedTripIdsReceivedWhileLoading.clear();
     NotificationService.instance.clearTrackedReminders();
     _loadFuture = null;
     _archivedLoadFuture = null;
@@ -729,7 +735,7 @@ class TripStore extends ChangeNotifier {
         ..addAll(loadedTrips);
       _areArchivedTripsLoaded = false;
       _archivedLoadError = null;
-      if (_applyArchiveStatesReceivedWhileLoading()) {
+      if (_applyRealtimeChangesReceivedWhileLoading()) {
         _persistSnapshotInBackground();
       }
       _loadError = null;
@@ -758,7 +764,7 @@ class TripStore extends ChangeNotifier {
       _isInitialized = true;
     } finally {
       if (_sessionToken == token) {
-        if (_applyArchiveStatesReceivedWhileLoading()) {
+        if (_applyRealtimeChangesReceivedWhileLoading()) {
           _persistSnapshotInBackground();
         }
         _isLoading = false;
@@ -769,22 +775,18 @@ class TripStore extends ChangeNotifier {
   }
 
   Future<void> _loadArchivedTrips() async {
-    await ensureLoaded();
-    if (!_isInitialized) return;
-
     final token = _sessionToken;
     _isLoadingArchived = true;
     notifyListeners();
     try {
+      await ensureLoaded();
+      if (_sessionToken != token || !_isInitialized) return;
+
       final loadedTrips = await _withSessionGuard(
         () => _tripService.fetchTripsForCurrentUser(isArchived: true),
       );
       if (_sessionToken != token) return;
 
-      final locallyArchivedTrips = <String, TripSummary>{
-        for (final trip in _trips.where((trip) => trip.isArchived))
-          trip.id: trip,
-      };
       final activeTripIds = _trips
           .where((trip) => !trip.isArchived)
           .map((trip) => trip.id)
@@ -794,20 +796,19 @@ class TripStore extends ChangeNotifier {
           if (!activeTripIds.contains(trip.id)) trip.id: trip,
       };
       _trips.removeWhere((trip) => trip.isArchived);
-      _trips.addAll([
-        ...locallyArchivedTrips.entries
-            .where((entry) => !loadedById.containsKey(entry.key))
-            .map((entry) => entry.value),
-        ...loadedById.values,
-      ]);
+      _trips.addAll(loadedById.values);
       _areArchivedTripsLoaded = true;
       _archivedLoadError = null;
+      _applyRealtimeChangesReceivedWhileLoading();
       _persistSnapshotInBackground();
     } catch (error) {
       if (_sessionToken != token) return;
       _archivedLoadError = error;
     } finally {
       if (_sessionToken == token) {
+        if (_applyRealtimeChangesReceivedWhileLoading()) {
+          _persistSnapshotInBackground();
+        }
         _isLoadingArchived = false;
         _archivedLoadFuture = null;
         notifyListeners();
@@ -916,6 +917,10 @@ class TripStore extends ChangeNotifier {
   }
 
   void _onPermissionChanged(String tripId, TripPermission permission) {
+    if (_isLoading || _isLoadingArchived) {
+      _permissionChangesReceivedWhileLoading[tripId] = permission;
+      return;
+    }
     final index = _trips.indexWhere((t) => t.id == tripId);
     if (index == -1) return;
     _trips[index] = _trips[index].copyWith(permission: permission);
@@ -924,6 +929,10 @@ class TripStore extends ChangeNotifier {
   }
 
   void _onRemovedFromTrip(String tripId) {
+    if (_isLoading || _isLoadingArchived) {
+      _removedTripIdsReceivedWhileLoading.add(tripId);
+      return;
+    }
     final index = _trips.indexWhere((t) => t.id == tripId);
     if (index == -1) return;
     _trips.removeAt(index);
@@ -934,7 +943,7 @@ class TripStore extends ChangeNotifier {
   }
 
   void _onArchivedChanged(String tripId, bool isArchived) {
-    if (_isLoading) {
+    if (_isLoading || _isLoadingArchived) {
       _archiveStatesReceivedWhileLoading[tripId] = isArchived;
       return;
     }
@@ -958,8 +967,12 @@ class TripStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool _applyArchiveStatesReceivedWhileLoading() {
-    if (_archiveStatesReceivedWhileLoading.isEmpty) return false;
+  bool _applyRealtimeChangesReceivedWhileLoading() {
+    if (_archiveStatesReceivedWhileLoading.isEmpty &&
+        _permissionChangesReceivedWhileLoading.isEmpty &&
+        _removedTripIdsReceivedWhileLoading.isEmpty) {
+      return false;
+    }
     var changed = false;
     for (final entry in _archiveStatesReceivedWhileLoading.entries) {
       final index = _trips.indexWhere((trip) => trip.id == entry.key);
@@ -980,6 +993,25 @@ class TripStore extends ChangeNotifier {
       }
     }
     _archiveStatesReceivedWhileLoading.clear();
+
+    for (final entry in _permissionChangesReceivedWhileLoading.entries) {
+      if (_removedTripIdsReceivedWhileLoading.contains(entry.key)) continue;
+      final index = _trips.indexWhere((trip) => trip.id == entry.key);
+      if (index == -1 || _trips[index].permission == entry.value) continue;
+      _trips[index] = _trips[index].copyWith(permission: entry.value);
+      changed = true;
+    }
+    _permissionChangesReceivedWhileLoading.clear();
+
+    for (final tripId in _removedTripIdsReceivedWhileLoading) {
+      final index = _trips.indexWhere((trip) => trip.id == tripId);
+      if (index == -1) continue;
+      _trips.removeAt(index);
+      _membersByTripId.remove(tripId);
+      unawaited(NotificationService.instance.cancelTripReminders(tripId));
+      changed = true;
+    }
+    _removedTripIdsReceivedWhileLoading.clear();
     return changed;
   }
 
