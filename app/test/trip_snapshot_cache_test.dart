@@ -105,6 +105,33 @@ void main() {
     expect((await cache.loadForUser('user-2'))!.trips.single.title, 'User two');
   });
 
+  test('migrates a compatible v1 snapshot to v2', () async {
+    final savedAt = DateTime.utc(2026, 6, 1, 8);
+    SharedPreferences.setMockInitialValues({
+      'trip_snapshot_v1:user-1': jsonEncode({
+        'schema_version': 1,
+        'saved_at': savedAt.toIso8601String(),
+        'trips': [
+          {
+            'id': 'trip-1',
+            'title': '舊版旅程',
+            'date_range': '2026/05/01 - 2026/05/02',
+            'role': 'owner',
+            'days': [],
+          },
+        ],
+      }),
+    });
+
+    final snapshot = await cache.loadForUser('user-1');
+    final preferences = await SharedPreferences.getInstance();
+
+    expect(snapshot, isNotNull);
+    expect(snapshot!.trips.single.isArchived, isFalse);
+    expect(preferences.containsKey('trip_snapshot_v2:user-1'), isTrue);
+    expect(preferences.containsKey('trip_snapshot_v1:user-1'), isFalse);
+  });
+
   test('ignores corrupt snapshot payloads', () async {
     SharedPreferences.setMockInitialValues({
       'trip_snapshot_v1:user-1': '{not-json',

@@ -336,6 +336,7 @@ class TripSummary {
     this.color,
     this.customStopColors = const [],
     this.permission,
+    this.isArchived = false,
   });
 
   final String id;
@@ -350,13 +351,15 @@ class TripSummary {
 
   /// Permission for guests. `null` when [role] is [TripRole.owner].
   final TripPermission? permission;
+  final bool isArchived;
 
   /// Whether the current user may edit this trip's content.
   bool get canEdit =>
-      role == TripRole.owner || permission == TripPermission.editor;
+      !isArchived &&
+      (role == TripRole.owner || permission == TripPermission.editor);
 
   /// Whether the current user should be blocked from editing this trip.
-  bool get isReadOnly => !canEdit;
+  bool get isReadOnly => isArchived || !canEdit;
 
   TripSummary copyWith({
     String? id,
@@ -369,6 +372,7 @@ class TripSummary {
     String? color,
     List<String>? customStopColors,
     TripPermission? permission,
+    bool? isArchived,
   }) {
     return TripSummary(
       id: id ?? this.id,
@@ -381,6 +385,7 @@ class TripSummary {
       color: color ?? this.color,
       customStopColors: customStopColors ?? this.customStopColors,
       permission: permission ?? this.permission,
+      isArchived: isArchived ?? this.isArchived,
     );
   }
 
@@ -400,6 +405,7 @@ class TripSummary {
       'color': color,
       'custom_stop_colors': customStopColors,
       'permission': permission?.name,
+      'is_archived': isArchived,
     };
   }
 
@@ -423,6 +429,7 @@ class TripSummary {
       color: json['color'] as String?,
       customStopColors: _stringList(json['custom_stop_colors']),
       permission: _tripPermissionFromCache(json['permission'] as String?),
+      isArchived: json['is_archived'] as bool? ?? false,
     );
   }
 }

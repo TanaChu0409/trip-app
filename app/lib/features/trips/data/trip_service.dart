@@ -11,13 +11,16 @@ class TripService {
 
   SupabaseClient get _client => Supabase.instance.client;
 
-  Future<List<TripSummary>> fetchTripsForCurrentUser() async {
+  Future<List<TripSummary>> fetchTripsForCurrentUser({
+    required bool isArchived,
+  }) async {
     final userId = _requireUserId();
     final ownedRows = await _client
         .from('trips')
-        .select('id, title, start_date, end_date, share_code, color, custom_stop_colors')
+        .select(
+            'id, title, start_date, end_date, share_code, color, custom_stop_colors, is_archived')
         .eq('owner_id', userId)
-        .eq('is_archived', false)
+        .eq('is_archived', isArchived)
         .order('start_date', ascending: false);
 
     final sharedAccessRows = await _client
@@ -37,9 +40,10 @@ class TripService {
         ? const <dynamic>[]
         : await _client
             .from('trips')
-            .select('id, title, start_date, end_date, share_code, color, custom_stop_colors')
+            .select(
+                'id, title, start_date, end_date, share_code, color, custom_stop_colors, is_archived')
             .inFilter('id', sharedTripIds)
-            .eq('is_archived', false)
+            .eq('is_archived', isArchived)
             .order('start_date', ascending: false);
 
     final ownedTrips =
@@ -69,7 +73,8 @@ class TripService {
           'owner_id': userId,
           'color': color,
         })
-        .select('id, title, start_date, end_date, share_code, color, custom_stop_colors')
+        .select(
+            'id, title, start_date, end_date, share_code, color, custom_stop_colors')
         .single();
 
     final tripId = tripRow['id'] as String;
@@ -93,7 +98,8 @@ class TripService {
   }) async {
     final rows = await _client
         .from('trips')
-        .select('id, title, start_date, end_date, share_code, owner_id, color, custom_stop_colors')
+        .select(
+            'id, title, start_date, end_date, share_code, owner_id, color, custom_stop_colors, is_archived')
         .eq('id', tripId)
         .limit(1);
 
@@ -103,15 +109,31 @@ class TripService {
 
     final row = Map<String, dynamic>.from(rows.first);
     final resolvedRole = role ?? _resolveRole(row);
-    final permissionMap = (resolvedRole == TripRole.guest && permission != null)
-        ? {tripId: permission}
-        : <String, TripPermission>{};
+    final resolvedPermission = permission ??
+        (resolvedRole == TripRole.guest
+            ? await _fetchCurrentUserPermission(tripId)
+            : null);
+    final permissionMap = resolvedPermission == null
+        ? <String, TripPermission>{}
+        : {tripId: resolvedPermission};
     final trips = await _assembleTrips(
       rows: [row],
       role: resolvedRole,
       permissionByTripId: permissionMap,
     );
     return trips.isEmpty ? null : trips.first;
+  }
+
+  Future<TripPermission?> _fetchCurrentUserPermission(String tripId) async {
+    final userId = _requireUserId();
+    final rows = await _client
+        .from('shared_access')
+        .select('permission')
+        .eq('trip_id', tripId)
+        .eq('user_id', userId)
+        .limit(1);
+    if (rows.isEmpty) return null;
+    return tripPermissionFromBackend(rows.first['permission'] as String?);
   }
 
   /// Invite a user to a trip by their email address (owner-only).
@@ -147,6 +169,17 @@ class TripService {
         .eq('owner_id', userId)
         .select('id');
     return rows.isNotEmpty;
+  }
+
+  Future<bool> setOwnedTripArchived(String tripId, bool isArchived) async {
+    final updated = await _client.rpc(
+      'set_owned_trip_archived',
+      params: {
+        'p_trip_id': tripId,
+        'p_is_archived': isArchived,
+      },
+    );
+    return updated == true;
   }
 
   Future<bool> leaveSharedTrip(String tripId) async {
@@ -316,6 +349,7 @@ class TripService {
             color: row['color'] as String?,
             customStopColors: _stringList(row['custom_stop_colors']),
             permission: permissionByTripId[row['id'] as String],
+            isArchived: row['is_archived'] as bool? ?? false,
           ),
         )
         .toList(growable: false);

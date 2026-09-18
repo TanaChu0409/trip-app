@@ -21,7 +21,24 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
   @override
   void initState() {
     super.initState();
-    _loadMembers();
+    _store.addListener(_handleStoreChanged);
+    if (!_isArchived) {
+      _loadMembers();
+    } else {
+      _isLoading = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _store.removeListener(_handleStoreChanged);
+    super.dispose();
+  }
+
+  bool get _isArchived => _store.findById(widget.tripId)?.isArchived ?? false;
+
+  void _handleStoreChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadMembers() async {
@@ -47,7 +64,8 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
     }
   }
 
-  Future<void> _changePermission(TripMember member, TripPermission permission) async {
+  Future<void> _changePermission(
+      TripMember member, TripPermission permission) async {
     try {
       await _store.updateMemberPermission(
         widget.tripId,
@@ -107,6 +125,11 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isArchived) {
+      return const Scaffold(
+        body: Center(child: Text('封存旅程無法管理成員')),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('成員管理'),
@@ -200,21 +223,18 @@ class _MemberTile extends StatelessWidget {
 
     return ListTile(
       leading: CircleAvatar(
-        backgroundImage: member.avatarUrl != null
-            ? NetworkImage(member.avatarUrl!)
-            : null,
+        backgroundImage:
+            member.avatarUrl != null ? NetworkImage(member.avatarUrl!) : null,
         child: member.avatarUrl == null ? Text(initial) : null,
       ),
       title: Text(
         member.displayName,
-        style: theme.textTheme.bodyLarge
-            ?.copyWith(fontWeight: FontWeight.w600),
+        style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
       ),
       subtitle: member.email != null
           ? Text(
               member.email!,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: Colors.grey),
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
             )
           : null,
       trailing: Row(
