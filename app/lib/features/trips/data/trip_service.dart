@@ -11,16 +11,13 @@ class TripService {
 
   SupabaseClient get _client => Supabase.instance.client;
 
-  Future<List<TripSummary>> fetchTripsForCurrentUser({
-    required bool isArchived,
-  }) async {
+  Future<List<TripSummary>> fetchTripsForCurrentUser() async {
     final userId = _requireUserId();
     final ownedRows = await _client
         .from('trips')
         .select(
             'id, title, start_date, end_date, share_code, color, custom_stop_colors, is_archived')
         .eq('owner_id', userId)
-        .eq('is_archived', isArchived)
         .order('start_date', ascending: false);
 
     final sharedAccessRows = await _client
@@ -43,7 +40,6 @@ class TripService {
             .select(
                 'id, title, start_date, end_date, share_code, color, custom_stop_colors, is_archived')
             .inFilter('id', sharedTripIds)
-            .eq('is_archived', isArchived)
             .order('start_date', ascending: false);
 
     final ownedTrips =
@@ -156,14 +152,14 @@ class TripService {
   }
 
   Future<bool> setOwnedTripArchived(String tripId, bool isArchived) async {
-    final userId = _requireUserId();
-    final rows = await _client
-        .from('trips')
-        .update({'is_archived': isArchived})
-        .eq('id', tripId)
-        .eq('owner_id', userId)
-        .select('id');
-    return rows.isNotEmpty;
+    final updated = await _client.rpc(
+      'set_owned_trip_archived',
+      params: {
+        'p_trip_id': tripId,
+        'p_is_archived': isArchived,
+      },
+    );
+    return updated == true;
   }
 
   Future<bool> leaveSharedTrip(String tripId) async {

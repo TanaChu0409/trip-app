@@ -505,7 +505,17 @@ class _TripHeader extends StatelessWidget {
   Widget _buildMenu(BuildContext context) {
     if (trip.isArchived) {
       if (trip.role != TripRole.owner) {
-        return const Chip(label: Text('已封存'));
+        return PopupMenuButton<_TripDetailAction>(
+          tooltip: '旅程操作',
+          onSelected: onActionSelected,
+          itemBuilder: (context) => const [
+            PopupMenuItem(
+              value: _TripDetailAction.leaveTrip,
+              child: Text('退出旅程'),
+            ),
+          ],
+          child: const Chip(label: Text('已封存')),
+        );
       }
       return PopupMenuButton<_TripDetailAction>(
         tooltip: '旅程操作',
@@ -632,12 +642,14 @@ class _TripSummaryCard extends StatelessWidget {
             Text('旅程摘要', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 10),
             Text(
-              switch (trip.role) {
-                TripRole.owner => 'Owner 模式，可直接新增、編輯、刪除與排序行程地點。',
-                TripRole.guest => trip.permission == TripPermission.editor
-                    ? '協作模式，可新增、編輯、刪除行程地點與更改顏色。'
-                    : '受邀唯讀模式，可接收時程提醒與地點提醒。',
-              },
+              trip.isArchived
+                  ? '此旅程已封存，僅供瀏覽；編輯、邀請與導航提醒均已暫停。'
+                  : switch (trip.role) {
+                      TripRole.owner => 'Owner 模式，可直接新增、編輯、刪除與排序行程地點。',
+                      TripRole.guest => trip.permission == TripPermission.editor
+                          ? '協作模式，可新增、編輯、刪除行程地點與更改顏色。'
+                          : '受邀唯讀模式，可接收時程提醒與地點提醒。',
+                    },
             ),
             if (!trip.isArchived && trip.role == TripRole.owner) ...[
               const SizedBox(height: 16),
