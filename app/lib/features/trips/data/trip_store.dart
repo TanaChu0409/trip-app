@@ -43,6 +43,7 @@ class TripStore extends ChangeNotifier {
   final Set<String> _removedTripIdsReceivedWhileLoading = {};
   final Set<String> _restoredTripIdsBeingLoaded = {};
   final Map<String, bool> _archiveStatesReceivedWhileRestoring = {};
+  final Set<String> _removedTripIdsReceivedWhileRestoring = {};
 
   /// Monotonically-increasing token that is incremented each time
   /// [clearForSignOut] is called.  [_loadTrips] captures the value at the
@@ -601,6 +602,7 @@ class TripStore extends ChangeNotifier {
     _removedTripIdsReceivedWhileLoading.clear();
     _restoredTripIdsBeingLoaded.clear();
     _archiveStatesReceivedWhileRestoring.clear();
+    _removedTripIdsReceivedWhileRestoring.clear();
     NotificationService.instance.resetForTests();
     _realtimeService.unsubscribe();
     _loadFuture = null;
@@ -639,6 +641,7 @@ class TripStore extends ChangeNotifier {
     _removedTripIdsReceivedWhileLoading.clear();
     _restoredTripIdsBeingLoaded.clear();
     _archiveStatesReceivedWhileRestoring.clear();
+    _removedTripIdsReceivedWhileRestoring.clear();
     NotificationService.instance.clearTrackedReminders();
     _loadFuture = null;
     _archivedLoadFuture = null;
@@ -738,9 +741,13 @@ class TripStore extends ChangeNotifier {
 
       // An overlapping archive load is allowed to replace an older active
       // snapshot for the same trip. Do not let this response turn that newer
-      // archived row back into an active one.
+      // archived row back into an active one. Otherwise the active response
+      // is authoritative and must replace cached archived rows that have been
+      // restored on another device.
       final archivedById = <String, TripSummary>{
-        for (final trip in _trips.where((trip) => trip.isArchived))
+        for (final trip in _isLoadingArchived
+            ? _trips.where((trip) => trip.isArchived)
+            : const <TripSummary>[])
           trip.id: trip,
       };
       _trips
@@ -807,6 +814,11 @@ class TripStore extends ChangeNotifier {
       };
       // This response is the authoritative archived subset. Replace matching
       // stale active rows as well as previously loaded archived rows.
+      for (final trip in _trips.where(
+        (trip) => !trip.isArchived && loadedById.containsKey(trip.id),
+      )) {
+        unawaited(NotificationService.instance.cancelTripReminders(trip.id));
+      }
       _trips.removeWhere(
         (trip) => trip.isArchived || loadedById.containsKey(trip.id),
       );
@@ -943,6 +955,9 @@ class TripStore extends ChangeNotifier {
   }
 
   void _onRemovedFromTrip(String tripId) {
+    if (_restoredTripIdsBeingLoaded.contains(tripId)) {
+      _removedTripIdsReceivedWhileRestoring.add(tripId);
+    }
     if (_isLoading || _isLoadingArchived) {
       _removedTripIdsReceivedWhileLoading.add(tripId);
       return;
@@ -1046,7 +1061,8 @@ class TripStore extends ChangeNotifier {
       if (_sessionToken != token ||
           trip == null ||
           trip.isArchived ||
-          (_archiveStatesReceivedWhileRestoring[tripId] ?? false)) {
+          (_archiveStatesReceivedWhileRestoring[tripId] ?? false) ||
+          _removedTripIdsReceivedWhileRestoring.contains(tripId)) {
         return;
       }
 
@@ -1065,6 +1081,7 @@ class TripStore extends ChangeNotifier {
     } finally {
       _restoredTripIdsBeingLoaded.remove(tripId);
       _archiveStatesReceivedWhileRestoring.remove(tripId);
+      _removedTripIdsReceivedWhileRestoring.remove(tripId);
     }
   }
 
