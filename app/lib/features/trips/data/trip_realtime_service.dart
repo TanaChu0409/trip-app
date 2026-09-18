@@ -6,11 +6,13 @@ typedef PermissionChangedCallback = void Function(
   TripPermission permission,
 );
 typedef RemovedFromTripCallback = void Function(String tripId);
+typedef ArchivedChangedCallback = void Function(String tripId, bool isArchived);
 
-/// Subscribes to Supabase Realtime changes on `shared_access` rows that
-/// belong to the current user, so that:
+/// Subscribes to Supabase Realtime changes for trips the current user can
+/// access, so that:
 ///  - When the owner updates `permission`, the store is notified immediately.
 ///  - When the owner removes the user, the store removes the trip immediately.
+///  - When the owner archives or restores a trip, its local state is updated.
 class TripRealtimeService {
   TripRealtimeService._();
 
@@ -19,10 +21,12 @@ class TripRealtimeService {
   RealtimeChannel? _channel;
   PermissionChangedCallback? _onPermissionChanged;
   RemovedFromTripCallback? _onRemovedFromTrip;
+  ArchivedChangedCallback? _onArchivedChanged;
 
   Future<void> subscribe({
     required PermissionChangedCallback onPermissionChanged,
     required RemovedFromTripCallback onRemovedFromTrip,
+    required ArchivedChangedCallback onArchivedChanged,
   }) async {
     // Always clean up any existing channel before creating a new one so that
     // repeated calls to subscribe() (e.g. from reloadTrips()) never leave
@@ -31,6 +35,7 @@ class TripRealtimeService {
 
     _onPermissionChanged = onPermissionChanged;
     _onRemovedFromTrip = onRemovedFromTrip;
+    _onArchivedChanged = onArchivedChanged;
 
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
@@ -38,6 +43,19 @@ class TripRealtimeService {
 
     _channel = client
         .channel('shared_access:$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'trips',
+          callback: (payload) {
+            final row = payload.newRecord;
+            final tripId = row['id'] as String?;
+            final isArchived = row['is_archived'] as bool?;
+            if (tripId != null && isArchived != null) {
+              _onArchivedChanged?.call(tripId, isArchived);
+            }
+          },
+        )
         .onPostgresChanges(
           event: PostgresChangeEvent.update,
           schema: 'public',
@@ -86,5 +104,6 @@ class TripRealtimeService {
     }
     _onPermissionChanged = null;
     _onRemovedFromTrip = null;
+    _onArchivedChanged = null;
   }
 }

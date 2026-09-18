@@ -61,6 +61,22 @@ void main() {
         ['#654321']);
   });
 
+  test('trip summary cache roundtrip preserves archive state', () {
+    const trip = TripSummary(
+      id: 'trip-archived',
+      title: '封存旅程',
+      dateRange: '2026/05/01 - 2026/05/02',
+      role: TripRole.owner,
+      days: [],
+      isArchived: true,
+    );
+
+    final restored = TripSummary.fromCacheJson(trip.toCacheJson());
+
+    expect(restored.isArchived, isTrue);
+    expect(restored.isReadOnly, isTrue);
+  });
+
   test('trip summary stop count aggregates nested stops', () {
     const trip = TripSummary(
       id: 'trip-1',
@@ -196,6 +212,19 @@ void main() {
         days: [],
         permission: TripPermission.viewer,
       );
+      expect(trip.isReadOnly, isTrue);
+    });
+
+    test('archived owner is read-only', () {
+      const trip = TripSummary(
+        id: 't',
+        title: 't',
+        dateRange: '2026/01/01 - 2026/01/02',
+        role: TripRole.owner,
+        days: [],
+        isArchived: true,
+      );
+      expect(trip.canEdit, isFalse);
       expect(trip.isReadOnly, isTrue);
     });
   });

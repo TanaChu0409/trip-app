@@ -57,6 +57,11 @@ class _NavigationModeScreenState extends State<NavigationModeScreen> {
     if (trip == null || trip.days.isEmpty) {
       return const Scaffold(body: Center(child: Text('找不到可導航的旅程')));
     }
+    if (trip.isArchived) {
+      return const Scaffold(
+        body: Center(child: Text('封存旅程無法使用導航模式')),
+      );
+    }
 
     final activeDay = trip.days.first;
 

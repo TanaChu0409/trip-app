@@ -11,13 +11,16 @@ class TripService {
 
   SupabaseClient get _client => Supabase.instance.client;
 
-  Future<List<TripSummary>> fetchTripsForCurrentUser() async {
+  Future<List<TripSummary>> fetchTripsForCurrentUser({
+    required bool isArchived,
+  }) async {
     final userId = _requireUserId();
     final ownedRows = await _client
         .from('trips')
-        .select('id, title, start_date, end_date, share_code, color, custom_stop_colors')
+        .select(
+            'id, title, start_date, end_date, share_code, color, custom_stop_colors, is_archived')
         .eq('owner_id', userId)
-        .eq('is_archived', false)
+        .eq('is_archived', isArchived)
         .order('start_date', ascending: false);
 
     final sharedAccessRows = await _client
@@ -37,9 +40,10 @@ class TripService {
         ? const <dynamic>[]
         : await _client
             .from('trips')
-            .select('id, title, start_date, end_date, share_code, color, custom_stop_colors')
+            .select(
+                'id, title, start_date, end_date, share_code, color, custom_stop_colors, is_archived')
             .inFilter('id', sharedTripIds)
-            .eq('is_archived', false)
+            .eq('is_archived', isArchived)
             .order('start_date', ascending: false);
 
     final ownedTrips =
@@ -69,7 +73,8 @@ class TripService {
           'owner_id': userId,
           'color': color,
         })
-        .select('id, title, start_date, end_date, share_code, color, custom_stop_colors')
+        .select(
+            'id, title, start_date, end_date, share_code, color, custom_stop_colors')
         .single();
 
     final tripId = tripRow['id'] as String;
@@ -93,7 +98,8 @@ class TripService {
   }) async {
     final rows = await _client
         .from('trips')
-        .select('id, title, start_date, end_date, share_code, owner_id, color, custom_stop_colors')
+        .select(
+            'id, title, start_date, end_date, share_code, owner_id, color, custom_stop_colors, is_archived')
         .eq('id', tripId)
         .limit(1);
 
@@ -143,6 +149,17 @@ class TripService {
     final rows = await _client
         .from('trips')
         .delete()
+        .eq('id', tripId)
+        .eq('owner_id', userId)
+        .select('id');
+    return rows.isNotEmpty;
+  }
+
+  Future<bool> setOwnedTripArchived(String tripId, bool isArchived) async {
+    final userId = _requireUserId();
+    final rows = await _client
+        .from('trips')
+        .update({'is_archived': isArchived})
         .eq('id', tripId)
         .eq('owner_id', userId)
         .select('id');
@@ -316,6 +333,7 @@ class TripService {
             color: row['color'] as String?,
             customStopColors: _stringList(row['custom_stop_colors']),
             permission: permissionByTripId[row['id'] as String],
+            isArchived: row['is_archived'] as bool? ?? false,
           ),
         )
         .toList(growable: false);

@@ -7,6 +7,7 @@ import 'package:trip_planner_app/features/trip_detail/presentation/member_manage
 import 'package:trip_planner_app/features/trip_detail/presentation/stop_form_screen.dart';
 import 'package:trip_planner_app/features/trip_detail/presentation/trip_detail_screen.dart';
 import 'package:trip_planner_app/features/trips/presentation/trips_list_screen.dart';
+import 'package:trip_planner_app/features/trips/presentation/archived_trips_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authStateListenable = ref.watch(authStateListenableProvider);
@@ -37,6 +38,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/trips',
         builder: (context, state) => const TripsListScreen(),
         routes: [
+          GoRoute(
+            path: 'archived',
+            builder: (context, state) => const ArchivedTripsScreen(),
+            routes: [
+              GoRoute(
+                path: ':tripId',
+                builder: (context, state) => TripDetailScreen(
+                  tripId: state.pathParameters['tripId']!,
+                ),
+              ),
+            ],
+          ),
           GoRoute(
             path: ':tripId',
             builder: (context, state) {

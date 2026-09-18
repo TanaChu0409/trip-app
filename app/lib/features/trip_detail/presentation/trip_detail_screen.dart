@@ -34,10 +34,9 @@ class _TripDetailScreenState extends State<TripDetailScreen>
     super.initState();
     _currentTrip = _tripStore.findById(widget.tripId);
     _isStoreLoading = _tripStore.isLoading;
-    final initialDayCount =
-        _currentTrip == null || _currentTrip!.days.isEmpty
-            ? 1
-            : _currentTrip!.days.length;
+    final initialDayCount = _currentTrip == null || _currentTrip!.days.isEmpty
+        ? 1
+        : _currentTrip!.days.length;
     _tabController = TabController(length: initialDayCount, vsync: this);
     _tabController.addListener(_handleTabChanged);
     _tripStore.addListener(_handleStoreChanged);
@@ -133,8 +132,8 @@ class _TripDetailScreenState extends State<TripDetailScreen>
           ? null
           : FloatingActionButton.extended(
               onPressed: () {
-                final currentDay = trip.days[
-                    _tabController.index.clamp(0, trip.days.length - 1)];
+                final currentDay = trip
+                    .days[_tabController.index.clamp(0, trip.days.length - 1)];
                 context.push(
                   '/trips/${trip.id}/days/${currentDay.id}/stops/new',
                 );
@@ -161,14 +160,17 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                     _TripHeader(
                       trip: trip,
                       tripColor: tripColor,
-                      onBackPressed: () => context.go('/trips'),
+                      onBackPressed: () => context.go(
+                        trip.isArchived ? '/trips/archived' : '/trips',
+                      ),
                       onActionSelected: (action) =>
                           _handleAction(context, trip, action),
                     ),
                     _TripSummaryCard(
                       trip: trip,
                       tripColor: tripColor,
-                      onInviteMember: () => _showInviteMemberSheet(context, trip),
+                      onInviteMember: () =>
+                          _showInviteMemberSheet(context, trip),
                       onOpenNavigation: () =>
                           context.go('/trips/${trip.id}/navigation'),
                     ),
@@ -204,9 +206,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                 : TabBarView(
                     controller: _tabController,
                     children: [
-                      for (var index = 0;
-                          index < trip.days.length;
-                          index += 1)
+                      for (var index = 0; index < trip.days.length; index += 1)
                         DayTab(
                           tripId: trip.id,
                           day: trip.days[index],
@@ -244,6 +244,50 @@ class _TripDetailScreenState extends State<TripDetailScreen>
           context.push('/trips/${trip.id}/members');
         }
         return;
+      case _TripDetailAction.archiveTrip:
+        await _confirmSetArchived(context, trip, true);
+        return;
+      case _TripDetailAction.restoreTrip:
+        await _confirmSetArchived(context, trip, false);
+        return;
+    }
+  }
+
+  Future<void> _confirmSetArchived(
+    BuildContext context,
+    TripSummary trip,
+    bool isArchived,
+  ) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(isArchived ? '封存旅程？' : '還原旅程？'),
+            content: Text(isArchived
+                ? '封存後，所有成員只能從封存頁查看此旅程，且無法編輯或使用導航。'
+                : '還原後，旅程會重新出現在一般列表並恢復提醒。'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('取消')),
+              FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(isArchived ? '確認封存' : '確認還原')),
+            ],
+          ),
+        ) ??
+        false;
+    if (!context.mounted || !confirmed) return;
+
+    final updated = await _tripStore.setTripArchived(trip.id, isArchived);
+    if (!context.mounted) return;
+    if (updated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isArchived ? '已封存旅程' : '已還原旅程')),
+      );
+      context.go(isArchived ? '/trips/archived' : '/trips');
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('操作失敗，請稍後再試')));
     }
   }
 
@@ -411,7 +455,14 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   }
 }
 
-enum _TripDetailAction { deleteTrip, leaveTrip, changeColor, manageMembers }
+enum _TripDetailAction {
+  archiveTrip,
+  restoreTrip,
+  deleteTrip,
+  leaveTrip,
+  changeColor,
+  manageMembers,
+}
 
 class _TripHeader extends StatelessWidget {
   const _TripHeader({
@@ -452,6 +503,22 @@ class _TripHeader extends StatelessWidget {
   }
 
   Widget _buildMenu(BuildContext context) {
+    if (trip.isArchived) {
+      if (trip.role != TripRole.owner) {
+        return const Chip(label: Text('已封存'));
+      }
+      return PopupMenuButton<_TripDetailAction>(
+        tooltip: '旅程操作',
+        onSelected: onActionSelected,
+        itemBuilder: (context) => const [
+          PopupMenuItem(
+            value: _TripDetailAction.restoreTrip,
+            child: Text('還原旅程'),
+          ),
+        ],
+        icon: const Icon(Icons.more_vert_rounded),
+      );
+    }
     // Owner: can manage members, change color, delete trip
     if (trip.role == TripRole.owner) {
       return PopupMenuButton<_TripDetailAction>(
@@ -465,6 +532,10 @@ class _TripHeader extends StatelessWidget {
           PopupMenuItem(
             value: _TripDetailAction.changeColor,
             child: Text('更改顏色'),
+          ),
+          PopupMenuItem(
+            value: _TripDetailAction.archiveTrip,
+            child: Text('封存旅程'),
           ),
           PopupMenuItem(
             value: _TripDetailAction.deleteTrip,
@@ -562,15 +633,13 @@ class _TripSummaryCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               switch (trip.role) {
-                TripRole.owner =>
-                  'Owner 模式，可直接新增、編輯、刪除與排序行程地點。',
-                TripRole.guest =>
-                  trip.permission == TripPermission.editor
-                      ? '協作模式，可新增、編輯、刪除行程地點與更改顏色。'
-                      : '受邀唯讀模式，可接收時程提醒與地點提醒。',
+                TripRole.owner => 'Owner 模式，可直接新增、編輯、刪除與排序行程地點。',
+                TripRole.guest => trip.permission == TripPermission.editor
+                    ? '協作模式，可新增、編輯、刪除行程地點與更改顏色。'
+                    : '受邀唯讀模式，可接收時程提醒與地點提醒。',
               },
             ),
-            if (trip.role == TripRole.owner) ...[
+            if (!trip.isArchived && trip.role == TripRole.owner) ...[
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: onInviteMember,
@@ -587,12 +656,14 @@ class _TripSummaryCard extends StatelessWidget {
                 _MiniStat(value: '${trip.stopCount}', label: '停靠點'),
               ],
             ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onOpenNavigation,
-              icon: const Icon(Icons.navigation_outlined),
-              label: const Text('開啟導航模式'),
-            ),
+            if (!trip.isArchived) ...[
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: onOpenNavigation,
+                icon: const Icon(Icons.navigation_outlined),
+                label: const Text('開啟導航模式'),
+              ),
+            ],
           ],
         ),
       ),
@@ -713,8 +784,8 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
                 Expanded(
                   child: Text(
                     '提醒：對方須先登入本應用程式以建立帳號',
-                    style: TextStyle(
-                        fontSize: 13, color: Colors.orange.shade800),
+                    style:
+                        TextStyle(fontSize: 13, color: Colors.orange.shade800),
                   ),
                 ),
               ],
@@ -757,8 +828,8 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
             const SizedBox(height: 20),
             FilledButton(
               onPressed: _isSubmitting ? null : _submit,
-              style:
-                  FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+              style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50)),
               child: Text(_isSubmitting ? '邀請中...' : '傳送邀請'),
             ),
           ],
@@ -793,8 +864,7 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
         case InviteMemberStatus.success:
           Navigator.of(context).pop();
           messenger.hideCurrentSnackBar();
-          messenger
-              .showSnackBar(SnackBar(content: Text('已成功邀請 $email 加入行程')));
+          messenger.showSnackBar(SnackBar(content: Text('已成功邀請 $email 加入行程')));
           return;
         case InviteMemberStatus.userNotFound:
           messenger.hideCurrentSnackBar();
@@ -804,19 +874,16 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
           return;
         case InviteMemberStatus.alreadyMember:
           messenger.hideCurrentSnackBar();
-          messenger.showSnackBar(
-              const SnackBar(content: Text('這位成員已在行程中')));
+          messenger.showSnackBar(const SnackBar(content: Text('這位成員已在行程中')));
           return;
         case InviteMemberStatus.cannotInviteSelf:
           messenger.hideCurrentSnackBar();
-          messenger
-              .showSnackBar(const SnackBar(content: Text('無法邀請自己')));
+          messenger.showSnackBar(const SnackBar(content: Text('無法邀請自己')));
           return;
         case InviteMemberStatus.notOwner:
         case InviteMemberStatus.invalidPermission:
           messenger.hideCurrentSnackBar();
-          messenger.showSnackBar(
-              const SnackBar(content: Text('邀請失敗，請稍後再試')));
+          messenger.showSnackBar(const SnackBar(content: Text('邀請失敗，請稍後再試')));
           return;
       }
     } catch (error) {

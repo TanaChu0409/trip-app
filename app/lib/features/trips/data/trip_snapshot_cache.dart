@@ -18,8 +18,8 @@ class TripSnapshotCache {
 
   static final TripSnapshotCache instance = TripSnapshotCache._();
 
-  static const int _schemaVersion = 1;
-  static const String _keyPrefix = 'trip_snapshot_v1';
+  static const int _schemaVersion = 2;
+  static const String _keyPrefix = 'trip_snapshot_v2';
 
   Future<TripSnapshot?> loadForUser(String userId) async {
     final preferences = await SharedPreferences.getInstance();

@@ -30,7 +30,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     return AnimatedBuilder(
       animation: _tripStore,
       builder: (context, _) {
-        final trips = _tripStore.trips;
+        final trips = _tripStore.activeTrips;
         final ownedTrips =
             trips.where((trip) => trip.role == TripRole.owner).toList();
         final sharedTrips =
@@ -91,6 +91,12 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                   ),
                   const SizedBox(height: 24),
                   _HeroPanel(ownedTrips: ownedTrips),
+                  const SizedBox(height: 24),
+                  OutlinedButton.icon(
+                    onPressed: () => context.go('/trips/archived'),
+                    icon: const Icon(Icons.archive_outlined),
+                    label: Text('封存旅程（${_tripStore.archivedTrips.length}）'),
+                  ),
                   const SizedBox(height: 24),
                   if (isLoading) ...[
                     const Center(child: CircularProgressIndicator()),
@@ -180,11 +186,51 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     TripCardAction action,
   ) async {
     switch (action) {
+      case TripCardAction.archiveTrip:
+        await _confirmSetArchived(context, trip, true);
+      case TripCardAction.restoreTrip:
+        await _confirmSetArchived(context, trip, false);
       case TripCardAction.deleteTrip:
         await _confirmDeleteTrip(context, trip);
       case TripCardAction.leaveTrip:
         await _confirmLeaveTrip(context, trip);
     }
+  }
+
+  Future<void> _confirmSetArchived(
+    BuildContext context,
+    TripSummary trip,
+    bool isArchived,
+  ) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(isArchived ? '封存旅程？' : '還原旅程？'),
+            content: Text(isArchived
+                ? '封存後，所有成員只能從封存頁查看「${trip.title}」，且無法編輯或使用導航。'
+                : '還原後，「${trip.title}」會重新出現在一般旅程列表並恢復提醒。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(isArchived ? '確認封存' : '確認還原'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!context.mounted || !confirmed) return;
+
+    final updated = await _tripStore.setTripArchived(trip.id, isArchived);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content:
+              Text(updated ? (isArchived ? '已封存旅程' : '已還原旅程') : '操作失敗，請稍後再試')),
+    );
   }
 
   Future<void> _signOut(BuildContext context) async {

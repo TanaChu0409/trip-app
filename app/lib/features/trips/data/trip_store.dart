@@ -43,6 +43,12 @@ class TripStore extends ChangeNotifier {
   int _sessionToken = 0;
 
   List<TripSummary> get trips => List<TripSummary>.unmodifiable(_trips);
+  List<TripSummary> get activeTrips => List<TripSummary>.unmodifiable(
+        _trips.where((trip) => !trip.isArchived),
+      );
+  List<TripSummary> get archivedTrips => List<TripSummary>.unmodifiable(
+        _trips.where((trip) => trip.isArchived),
+      );
   bool get isLoading => _isLoading;
   bool get isInitialized => _isInitialized;
   bool get hasCachedData => _hasCachedData;
@@ -431,6 +437,29 @@ class TripStore extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> setTripArchived(String tripId, bool isArchived) async {
+    final index = _trips.indexWhere(
+      (trip) => trip.id == tripId && trip.role == TripRole.owner,
+    );
+    if (index == -1) return false;
+
+    final updated = await _withSessionGuard(
+      () => _tripService.setOwnedTripArchived(tripId, isArchived),
+    );
+    if (!updated) return false;
+
+    final trip = _trips[index].copyWith(isArchived: isArchived);
+    _trips[index] = trip;
+    if (isArchived) {
+      await NotificationService.instance.cancelTripReminders(tripId);
+    } else {
+      await NotificationService.instance.scheduleTripReminders(trip);
+    }
+    _persistSnapshotInBackground();
+    notifyListeners();
+    return true;
+  }
+
   Future<bool> leaveSharedTrip(String tripId) async {
     final index = _trips
         .indexWhere((trip) => trip.id == tripId && trip.role == TripRole.guest);
@@ -495,6 +524,7 @@ class TripStore extends ChangeNotifier {
 
   /// Fetch the member list for [tripId] (owner-only operation).
   Future<List<TripMember>> fetchTripMembers(String tripId) async {
+    await _ensureTripIsActive(tripId);
     final members =
         await _withSessionGuard(() => _tripService.fetchTripMembers(tripId));
     _membersByTripId[tripId] = members;
@@ -509,6 +539,7 @@ class TripStore extends ChangeNotifier {
     String userId,
     TripPermission permission,
   ) async {
+    await _ensureTripIsActive(tripId);
     await _withSessionGuard(
       () => _tripService.updateMemberPermission(tripId, userId, permission),
     );
@@ -524,6 +555,7 @@ class TripStore extends ChangeNotifier {
 
   /// Remove a member from the trip (owner-only).
   Future<void> removeMember(String tripId, String userId) async {
+    await _ensureTripIsActive(tripId);
     await _withSessionGuard(() => _tripService.removeMember(tripId, userId));
     final members = _membersByTripId[tripId];
     if (members != null) {
@@ -641,9 +673,15 @@ class TripStore extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final loadedTrips = await _withSessionGuard(
-        _tripService.fetchTripsForCurrentUser,
-      );
+      final results = await Future.wait([
+        _withSessionGuard(
+          () => _tripService.fetchTripsForCurrentUser(isArchived: false),
+        ),
+        _withSessionGuard(
+          () => _tripService.fetchTripsForCurrentUser(isArchived: true),
+        ),
+      ]);
+      final loadedTrips = [...results[0], ...results[1]];
 
       // If the session changed while we were waiting, discard results.
       if (_sessionToken != token) return;
@@ -655,7 +693,7 @@ class TripStore extends ChangeNotifier {
       _isInitialized = true;
       _hasCachedData = false;
       NotificationService.instance.clearTrackedReminders();
-      for (final trip in _trips) {
+      for (final trip in _trips.where((trip) => !trip.isArchived)) {
         await NotificationService.instance.scheduleTripReminders(trip);
       }
       // Guard again: reminders scheduling is also async.
@@ -665,10 +703,11 @@ class TripStore extends ChangeNotifier {
       await _snapshotCache.saveForUser(userId, _trips, savedAt: syncedAt);
       _lastSyncedAt = syncedAt;
 
-      // Subscribe to Realtime for permission/removal changes.
+      // Subscribe to Realtime for permission, membership, and archive changes.
       await _realtimeService.subscribe(
         onPermissionChanged: _onPermissionChanged,
         onRemovedFromTrip: _onRemovedFromTrip,
+        onArchivedChanged: _onArchivedChanged,
       );
 
       // Final guard: drop the notifyListeners() if the session changed.
@@ -808,8 +847,31 @@ class TripStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _onArchivedChanged(String tripId, bool isArchived) {
+    final index = _trips.indexWhere((trip) => trip.id == tripId);
+    if (index == -1 || _trips[index].isArchived == isArchived) return;
+
+    final trip = _trips[index].copyWith(isArchived: isArchived);
+    _trips[index] = trip;
+    if (isArchived) {
+      unawaited(NotificationService.instance.cancelTripReminders(tripId));
+    } else {
+      unawaited(NotificationService.instance.scheduleTripReminders(trip));
+    }
+    _persistSnapshotInBackground();
+    notifyListeners();
+  }
+
   Future<void> _refreshTripReminders(TripSummary trip) async {
     await NotificationService.instance.scheduleTripReminders(trip);
+  }
+
+  Future<void> _ensureTripIsActive(String tripId) async {
+    await ensureLoaded();
+    final trip = findById(tripId);
+    if (trip?.isArchived ?? false) {
+      throw StateError('Archived trips cannot manage members.');
+    }
   }
 
   Future<StopItem> _saveStop(String dayId, StopItem stop) async {
