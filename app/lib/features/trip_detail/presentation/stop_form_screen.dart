@@ -61,11 +61,13 @@ class _StopFormScreenState extends State<StopFormScreen> {
   @override
   void initState() {
     super.initState();
+    _tripStore.addListener(_handleTripStoreChanged);
     _tripStore.ensureLoaded();
   }
 
   @override
   void dispose() {
+    _tripStore.removeListener(_handleTripStoreChanged);
     _titleController.dispose();
     _timeController.dispose();
     _noteController.dispose();
@@ -75,6 +77,10 @@ class _StopFormScreenState extends State<StopFormScreen> {
       parkingSpot.dispose();
     }
     super.dispose();
+  }
+
+  void _handleTripStoreChanged() {
+    if (mounted) setState(() {});
   }
 
   TripSummary? get _trip => _tripStore.findById(widget.tripId);
@@ -110,7 +116,11 @@ class _StopFormScreenState extends State<StopFormScreen> {
     if (isReadOnly) {
       return Scaffold(
         appBar: AppBar(title: const Text('唯讀旅程')),
-        body: const Center(child: Text('受邀唯讀旅程無法編輯地點。')),
+        body: Center(
+          child: Text(
+            trip.isArchived ? '旅程已封存，無法編輯地點。' : '受邀唯讀旅程無法編輯地點。',
+          ),
+        ),
       );
     }
 

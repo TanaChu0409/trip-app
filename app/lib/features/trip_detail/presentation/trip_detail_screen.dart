@@ -258,6 +258,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                           day: trip.days[index],
                           tripColor: trip.color,
                           isReadOnly: isReadOnly,
+                          isArchived: trip.isArchived,
                           isActive: index == _tabController.index,
                           onAddButtonVisibilityChanged:
                               _handleBottomAddButtonVisibilityChanged,

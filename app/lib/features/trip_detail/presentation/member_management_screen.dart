@@ -17,11 +17,13 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
   List<TripMember>? _members;
   bool _isLoading = true;
   String? _errorMessage;
+  bool _wasArchived = false;
 
   @override
   void initState() {
     super.initState();
     _store.addListener(_handleStoreChanged);
+    _wasArchived = _isArchived;
     if (!_isArchived) {
       _loadMembers();
     } else {
@@ -38,7 +40,16 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
   bool get _isArchived => _store.findById(widget.tripId)?.isArchived ?? false;
 
   void _handleStoreChanged() {
-    if (mounted) setState(() {});
+    final isArchived = _isArchived;
+    final becameActive = _wasArchived && !isArchived;
+    _wasArchived = isArchived;
+
+    if (!mounted) return;
+    setState(() {});
+
+    if (becameActive && _members == null && !_isLoading) {
+      _loadMembers();
+    }
   }
 
   Future<void> _loadMembers() async {

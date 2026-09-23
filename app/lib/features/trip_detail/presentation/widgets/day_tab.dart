@@ -11,6 +11,7 @@ class DayTab extends StatefulWidget {
     required this.day,
     required this.tripColor,
     required this.isReadOnly,
+    this.isArchived = false,
     required this.isActive,
     required this.onAddButtonVisibilityChanged,
   });
@@ -19,6 +20,7 @@ class DayTab extends StatefulWidget {
   final TripDay day;
   final String? tripColor;
   final bool isReadOnly;
+  final bool isArchived;
   final bool isActive;
   final ValueChanged<bool> onAddButtonVisibilityChanged;
 
@@ -161,6 +163,7 @@ class _DayTabState extends State<DayTab> with AutomaticKeepAliveClientMixin {
       stop: stop,
       tripColor: widget.tripColor,
       isReadOnly: widget.isReadOnly,
+      isArchived: widget.isArchived,
       onTap: widget.isReadOnly || stop.id == null
           ? null
           : () => context.push(
