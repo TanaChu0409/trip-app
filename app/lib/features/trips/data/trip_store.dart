@@ -57,6 +57,11 @@ class TripStore extends ChangeNotifier {
   /// archived response cannot overwrite a newer active refresh.
   int _activeLoadGeneration = 0;
 
+  /// Generation of successful local archive or membership mutations. An
+  /// archived request captures this before fetching so it cannot restore a
+  /// stale archived row after the user restored it or left the trip.
+  int _archivedMutationGeneration = 0;
+
   List<TripSummary> get trips => List<TripSummary>.unmodifiable(_trips);
   List<TripSummary> get activeTrips => List<TripSummary>.unmodifiable(
         _trips.where((trip) => !trip.isArchived),
@@ -476,6 +481,8 @@ class TripStore extends ChangeNotifier {
     );
     if (!updated) return false;
 
+    _archivedMutationGeneration++;
+
     final updatedIndex = _trips.indexWhere(
       (trip) => trip.id == tripId && trip.role == TripRole.owner,
     );
@@ -506,7 +513,13 @@ class TripStore extends ChangeNotifier {
       return false;
     }
 
-    _trips.removeAt(index);
+    _archivedMutationGeneration++;
+    final updatedIndex = _trips.indexWhere(
+      (trip) => trip.id == tripId && trip.role == TripRole.guest,
+    );
+    if (updatedIndex == -1) return false;
+
+    _trips.removeAt(updatedIndex);
     await NotificationService.instance.cancelTripReminders(tripId);
     _persistSnapshotInBackground();
     notifyListeners();
@@ -621,6 +634,8 @@ class TripStore extends ChangeNotifier {
     _loadError = null;
     _archivedLoadError = null;
     _cacheUserId = null;
+    _activeLoadGeneration = 0;
+    _archivedMutationGeneration = 0;
     notifyListeners();
   }
 
@@ -659,6 +674,8 @@ class TripStore extends ChangeNotifier {
     _loadError = null;
     _archivedLoadError = null;
     _cacheUserId = null;
+    _activeLoadGeneration = 0;
+    _archivedMutationGeneration = 0;
     notifyListeners();
   }
 
@@ -814,12 +831,14 @@ class TripStore extends ChangeNotifier {
       // no newer active refresh has begun since this request's prerequisite
       // active load completed.
       final activeLoadGeneration = _activeLoadGeneration;
+      final archivedMutationGeneration = _archivedMutationGeneration;
 
       final loadedTrips = await _withSessionGuard(
         () => _tripService.fetchTripsForCurrentUser(isArchived: true),
       );
       if (_sessionToken != token ||
-          _activeLoadGeneration != activeLoadGeneration) {
+          _activeLoadGeneration != activeLoadGeneration ||
+          _archivedMutationGeneration != archivedMutationGeneration) {
         return;
       }
 

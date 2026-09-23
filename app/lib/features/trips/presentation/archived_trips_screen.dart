@@ -108,7 +108,16 @@ class _ArchivedTripsScreenState extends State<ArchivedTripsScreen> {
         false;
     if (!mounted || !shouldLeave) return;
 
-    final left = await _tripStore.leaveSharedTrip(trip.id);
+    bool left;
+    try {
+      left = await _tripStore.leaveSharedTrip(trip.id);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(SupabaseErrorFormatter.userMessage(error))),
+      );
+      return;
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(left ? '已退出旅程：${trip.title}' : '退出旅程失敗')),
