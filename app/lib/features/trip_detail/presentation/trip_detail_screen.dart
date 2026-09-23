@@ -483,7 +483,16 @@ class _TripDetailScreenState extends State<TripDetailScreen>
       return;
     }
 
-    final left = await _tripStore.leaveSharedTrip(trip.id);
+    bool left;
+    try {
+      left = await _tripStore.leaveSharedTrip(trip.id);
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(SupabaseErrorFormatter.userMessage(error))),
+      );
+      return;
+    }
     if (!context.mounted) {
       return;
     }

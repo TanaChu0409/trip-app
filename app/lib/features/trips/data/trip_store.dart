@@ -1028,9 +1028,7 @@ class TripStore extends ChangeNotifier {
     }
     final index = _trips.indexWhere((trip) => trip.id == tripId);
     if (index == -1) {
-      if (!isArchived) {
-        unawaited(_loadRestoredTrip(tripId));
-      }
+      unawaited(_loadTripForArchiveEvent(tripId));
       return;
     }
     if (_trips[index].isArchived == isArchived) return;
@@ -1056,9 +1054,7 @@ class TripStore extends ChangeNotifier {
     for (final entry in _archiveStatesReceivedWhileLoading.entries) {
       final index = _trips.indexWhere((trip) => trip.id == entry.key);
       if (index == -1) {
-        if (!entry.value) {
-          unawaited(_loadRestoredTrip(entry.key));
-        }
+        unawaited(_loadTripForArchiveEvent(entry.key));
         continue;
       }
       if (_trips[index].isArchived == entry.value) continue;
@@ -1097,7 +1093,7 @@ class TripStore extends ChangeNotifier {
     return changed;
   }
 
-  Future<void> _loadRestoredTrip(String tripId) async {
+  Future<void> _loadTripForArchiveEvent(String tripId) async {
     if (!_restoredTripIdsBeingLoaded.add(tripId)) return;
     final token = _sessionToken;
     try {
@@ -1106,31 +1102,34 @@ class TripStore extends ChangeNotifier {
       );
       if (_sessionToken != token ||
           trip == null ||
-          trip.isArchived ||
-          (_archiveStatesReceivedWhileRestoring[tripId] ?? false) ||
+          (_archiveStatesReceivedWhileRestoring.containsKey(tripId) &&
+              trip.isArchived !=
+                  _archiveStatesReceivedWhileRestoring[tripId]) ||
           _removedTripIdsReceivedWhileRestoring.contains(tripId)) {
         return;
       }
 
       final restoredPermission =
           _permissionChangesReceivedWhileRestoring[tripId];
-      final restoredTrip = restoredPermission == null
+      final eventTrip = restoredPermission == null
           ? trip
           : trip.copyWith(permission: restoredPermission);
       final index = _trips.indexWhere((item) => item.id == tripId);
       if (index == -1) {
-        _trips.add(restoredTrip);
+        _trips.add(eventTrip);
       } else {
-        _trips[index] = restoredTrip;
+        _trips[index] = eventTrip;
       }
-      unawaited(
-        NotificationService.instance.scheduleTripReminders(restoredTrip),
-      );
+      if (!eventTrip.isArchived) {
+        unawaited(
+          NotificationService.instance.scheduleTripReminders(eventTrip),
+        );
+      }
       _persistSnapshotInBackground();
       notifyListeners();
     } catch (error) {
       // A later full refresh will retry this best-effort Realtime repair.
-      debugPrint('Failed to load restored trip $tripId: $error');
+      debugPrint('Failed to load trip for archive event $tripId: $error');
     } finally {
       _restoredTripIdsBeingLoaded.remove(tripId);
       _archiveStatesReceivedWhileRestoring.remove(tripId);
