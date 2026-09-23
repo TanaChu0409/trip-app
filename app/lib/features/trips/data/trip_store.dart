@@ -755,12 +755,19 @@ class TripStore extends ChangeNotifier {
         // trip list from loading when WebSocket access is unavailable.
         debugPrint('Trip Realtime subscription unavailable: $error');
       }
+      // A local archive, restore, or leave operation can complete while this
+      // request is hydrating an older active snapshot. Do not let that stale
+      // response undo the successfully applied local mutation.
+      final archivedMutationGeneration = _archivedMutationGeneration;
       final loadedTrips = await _withSessionGuard(
         () => _tripService.fetchTripsForCurrentUser(isArchived: false),
       );
 
       // If the session changed while we were waiting, discard results.
-      if (_sessionToken != token) return;
+      if (_sessionToken != token ||
+          _archivedMutationGeneration != archivedMutationGeneration) {
+        return;
+      }
 
       // An overlapping archive load is allowed to replace an older active
       // snapshot for the same trip. Do not let this response turn that newer
