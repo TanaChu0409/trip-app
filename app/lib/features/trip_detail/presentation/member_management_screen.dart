@@ -47,7 +47,10 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
     if (!mounted) return;
     setState(() {});
 
-    if (becameActive && _members == null && !_isLoading) {
+    // Membership can change while the archived screen is shown (for example,
+    // when a guest leaves). Always reload when the trip is restored instead of
+    // reusing the pre-archive cache.
+    if (becameActive && !_isLoading) {
       _loadMembers();
     }
   }
