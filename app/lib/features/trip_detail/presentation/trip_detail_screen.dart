@@ -9,9 +9,14 @@ import 'package:trip_planner_app/features/trips/data/trip_store.dart';
 import 'package:trip_planner_app/features/trips/presentation/widgets/trip_color_picker.dart';
 
 class TripDetailScreen extends StatefulWidget {
-  const TripDetailScreen({super.key, required this.tripId});
+  const TripDetailScreen({
+    super.key,
+    required this.tripId,
+    this.loadArchivedTrip = false,
+  });
 
   final String tripId;
+  final bool loadArchivedTrip;
 
   @override
   State<TripDetailScreen> createState() => _TripDetailScreenState();
@@ -28,20 +33,25 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   // Cached trip reference – rebuilt only when this specific trip changes.
   TripSummary? _currentTrip;
   bool _isStoreLoading = false;
+  Object? _storeLoadError;
 
   @override
   void initState() {
     super.initState();
     _currentTrip = _tripStore.findById(widget.tripId);
-    _isStoreLoading = _tripStore.isLoading;
-    final initialDayCount =
-        _currentTrip == null || _currentTrip!.days.isEmpty
-            ? 1
-            : _currentTrip!.days.length;
+    _isStoreLoading = _isRelevantStoreLoading;
+    _storeLoadError = _relevantLoadError;
+    final initialDayCount = _currentTrip == null || _currentTrip!.days.isEmpty
+        ? 1
+        : _currentTrip!.days.length;
     _tabController = TabController(length: initialDayCount, vsync: this);
     _tabController.addListener(_handleTabChanged);
     _tripStore.addListener(_handleStoreChanged);
-    _tripStore.ensureLoaded();
+    if (widget.loadArchivedTrip) {
+      _tripStore.ensureArchivedTripsLoaded();
+    } else {
+      _tripStore.ensureLoaded();
+    }
   }
 
   @override
@@ -58,18 +68,30 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   void _handleStoreChanged() {
     if (!mounted) return;
     final newTrip = _tripStore.findById(widget.tripId);
-    final newLoading = _tripStore.isLoading;
-    if (identical(_currentTrip, newTrip) && _isStoreLoading == newLoading) {
+    final newLoading = _isRelevantStoreLoading;
+    final newError = _relevantLoadError;
+    if (identical(_currentTrip, newTrip) &&
+        _isStoreLoading == newLoading &&
+        identical(_storeLoadError, newError)) {
       return;
     }
     setState(() {
       _currentTrip = newTrip;
       _isStoreLoading = newLoading;
+      _storeLoadError = newError;
       if (newTrip != null) {
         _syncTabController(newTrip.days.isEmpty ? 1 : newTrip.days.length);
       }
     });
   }
+
+  bool get _isRelevantStoreLoading => widget.loadArchivedTrip
+      ? _tripStore.isLoadingArchived
+      : _tripStore.isLoading;
+
+  Object? get _relevantLoadError => widget.loadArchivedTrip
+      ? _tripStore.archivedLoadError
+      : _tripStore.loadError;
 
   void _syncTabController(int nextLength) {
     if (_tabController.length == nextLength) {
@@ -117,6 +139,29 @@ class _TripDetailScreenState extends State<TripDetailScreen>
         body: Center(child: CircularProgressIndicator()),
       );
     }
+    if (trip == null && widget.loadArchivedTrip && _storeLoadError != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('封存旅程載入失敗'),
+                const SizedBox(height: 8),
+                Text(SupabaseErrorFormatter.userMessage(_storeLoadError!)),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () =>
+                      _tripStore.ensureArchivedTripsLoaded(force: true),
+                  child: const Text('重新載入'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     if (trip == null) {
       return const Scaffold(body: Center(child: Text('找不到旅程')));
     }
@@ -133,8 +178,8 @@ class _TripDetailScreenState extends State<TripDetailScreen>
           ? null
           : FloatingActionButton.extended(
               onPressed: () {
-                final currentDay = trip.days[
-                    _tabController.index.clamp(0, trip.days.length - 1)];
+                final currentDay = trip
+                    .days[_tabController.index.clamp(0, trip.days.length - 1)];
                 context.push(
                   '/trips/${trip.id}/days/${currentDay.id}/stops/new',
                 );
@@ -161,14 +206,17 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                     _TripHeader(
                       trip: trip,
                       tripColor: tripColor,
-                      onBackPressed: () => context.go('/trips'),
+                      onBackPressed: () => context.go(
+                        trip.isArchived ? '/trips/archived' : '/trips',
+                      ),
                       onActionSelected: (action) =>
                           _handleAction(context, trip, action),
                     ),
                     _TripSummaryCard(
                       trip: trip,
                       tripColor: tripColor,
-                      onInviteMember: () => _showInviteMemberSheet(context, trip),
+                      onInviteMember: () =>
+                          _showInviteMemberSheet(context, trip),
                       onOpenNavigation: () =>
                           context.go('/trips/${trip.id}/navigation'),
                     ),
@@ -204,14 +252,13 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                 : TabBarView(
                     controller: _tabController,
                     children: [
-                      for (var index = 0;
-                          index < trip.days.length;
-                          index += 1)
+                      for (var index = 0; index < trip.days.length; index += 1)
                         DayTab(
                           tripId: trip.id,
                           day: trip.days[index],
                           tripColor: trip.color,
                           isReadOnly: isReadOnly,
+                          isArchived: trip.isArchived,
                           isActive: index == _tabController.index,
                           onAddButtonVisibilityChanged:
                               _handleBottomAddButtonVisibilityChanged,
@@ -244,6 +291,59 @@ class _TripDetailScreenState extends State<TripDetailScreen>
           context.push('/trips/${trip.id}/members');
         }
         return;
+      case _TripDetailAction.archiveTrip:
+        await _confirmSetArchived(context, trip, true);
+        return;
+      case _TripDetailAction.restoreTrip:
+        await _confirmSetArchived(context, trip, false);
+        return;
+    }
+  }
+
+  Future<void> _confirmSetArchived(
+    BuildContext context,
+    TripSummary trip,
+    bool isArchived,
+  ) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(isArchived ? '封存旅程？' : '還原旅程？'),
+            content: Text(isArchived
+                ? '封存後，所有成員只能從封存頁查看此旅程，且無法編輯或使用導航。'
+                : '還原後，旅程會重新出現在一般列表並恢復提醒。'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('取消')),
+              FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(isArchived ? '確認封存' : '確認還原')),
+            ],
+          ),
+        ) ??
+        false;
+    if (!context.mounted || !confirmed) return;
+
+    bool updated;
+    try {
+      updated = await _tripStore.setTripArchived(trip.id, isArchived);
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(SupabaseErrorFormatter.userMessage(error))),
+      );
+      return;
+    }
+    if (!context.mounted) return;
+    if (updated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isArchived ? '已封存旅程' : '已還原旅程')),
+      );
+      context.go(isArchived ? '/trips/archived' : '/trips');
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('操作失敗，請稍後再試')));
     }
   }
 
@@ -384,7 +484,16 @@ class _TripDetailScreenState extends State<TripDetailScreen>
       return;
     }
 
-    final left = await _tripStore.leaveSharedTrip(trip.id);
+    bool left;
+    try {
+      left = await _tripStore.leaveSharedTrip(trip.id);
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(SupabaseErrorFormatter.userMessage(error))),
+      );
+      return;
+    }
     if (!context.mounted) {
       return;
     }
@@ -411,7 +520,14 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   }
 }
 
-enum _TripDetailAction { deleteTrip, leaveTrip, changeColor, manageMembers }
+enum _TripDetailAction {
+  archiveTrip,
+  restoreTrip,
+  deleteTrip,
+  leaveTrip,
+  changeColor,
+  manageMembers,
+}
 
 class _TripHeader extends StatelessWidget {
   const _TripHeader({
@@ -452,6 +568,32 @@ class _TripHeader extends StatelessWidget {
   }
 
   Widget _buildMenu(BuildContext context) {
+    if (trip.isArchived) {
+      if (trip.role != TripRole.owner) {
+        return PopupMenuButton<_TripDetailAction>(
+          tooltip: '旅程操作',
+          onSelected: onActionSelected,
+          itemBuilder: (context) => const [
+            PopupMenuItem(
+              value: _TripDetailAction.leaveTrip,
+              child: Text('退出旅程'),
+            ),
+          ],
+          child: const Chip(label: Text('已封存')),
+        );
+      }
+      return PopupMenuButton<_TripDetailAction>(
+        tooltip: '旅程操作',
+        onSelected: onActionSelected,
+        itemBuilder: (context) => const [
+          PopupMenuItem(
+            value: _TripDetailAction.restoreTrip,
+            child: Text('還原旅程'),
+          ),
+        ],
+        icon: const Icon(Icons.more_vert_rounded),
+      );
+    }
     // Owner: can manage members, change color, delete trip
     if (trip.role == TripRole.owner) {
       return PopupMenuButton<_TripDetailAction>(
@@ -465,6 +607,10 @@ class _TripHeader extends StatelessWidget {
           PopupMenuItem(
             value: _TripDetailAction.changeColor,
             child: Text('更改顏色'),
+          ),
+          PopupMenuItem(
+            value: _TripDetailAction.archiveTrip,
+            child: Text('封存旅程'),
           ),
           PopupMenuItem(
             value: _TripDetailAction.deleteTrip,
@@ -561,16 +707,16 @@ class _TripSummaryCard extends StatelessWidget {
             Text('旅程摘要', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 10),
             Text(
-              switch (trip.role) {
-                TripRole.owner =>
-                  'Owner 模式，可直接新增、編輯、刪除與排序行程地點。',
-                TripRole.guest =>
-                  trip.permission == TripPermission.editor
-                      ? '協作模式，可新增、編輯、刪除行程地點與更改顏色。'
-                      : '受邀唯讀模式，可接收時程提醒與地點提醒。',
-              },
+              trip.isArchived
+                  ? '此旅程已封存，僅供瀏覽；編輯、邀請與導航提醒均已暫停。'
+                  : switch (trip.role) {
+                      TripRole.owner => 'Owner 模式，可直接新增、編輯、刪除與排序行程地點。',
+                      TripRole.guest => trip.permission == TripPermission.editor
+                          ? '協作模式，可新增、編輯、刪除行程地點與更改顏色。'
+                          : '受邀唯讀模式，可接收時程提醒與地點提醒。',
+                    },
             ),
-            if (trip.role == TripRole.owner) ...[
+            if (!trip.isArchived && trip.role == TripRole.owner) ...[
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: onInviteMember,
@@ -587,12 +733,14 @@ class _TripSummaryCard extends StatelessWidget {
                 _MiniStat(value: '${trip.stopCount}', label: '停靠點'),
               ],
             ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onOpenNavigation,
-              icon: const Icon(Icons.navigation_outlined),
-              label: const Text('開啟導航模式'),
-            ),
+            if (!trip.isArchived) ...[
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: onOpenNavigation,
+                icon: const Icon(Icons.navigation_outlined),
+                label: const Text('開啟導航模式'),
+              ),
+            ],
           ],
         ),
       ),
@@ -713,8 +861,8 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
                 Expanded(
                   child: Text(
                     '提醒：對方須先登入本應用程式以建立帳號',
-                    style: TextStyle(
-                        fontSize: 13, color: Colors.orange.shade800),
+                    style:
+                        TextStyle(fontSize: 13, color: Colors.orange.shade800),
                   ),
                 ),
               ],
@@ -757,8 +905,8 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
             const SizedBox(height: 20),
             FilledButton(
               onPressed: _isSubmitting ? null : _submit,
-              style:
-                  FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+              style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50)),
               child: Text(_isSubmitting ? '邀請中...' : '傳送邀請'),
             ),
           ],
@@ -793,8 +941,7 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
         case InviteMemberStatus.success:
           Navigator.of(context).pop();
           messenger.hideCurrentSnackBar();
-          messenger
-              .showSnackBar(SnackBar(content: Text('已成功邀請 $email 加入行程')));
+          messenger.showSnackBar(SnackBar(content: Text('已成功邀請 $email 加入行程')));
           return;
         case InviteMemberStatus.userNotFound:
           messenger.hideCurrentSnackBar();
@@ -804,19 +951,16 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
           return;
         case InviteMemberStatus.alreadyMember:
           messenger.hideCurrentSnackBar();
-          messenger.showSnackBar(
-              const SnackBar(content: Text('這位成員已在行程中')));
+          messenger.showSnackBar(const SnackBar(content: Text('這位成員已在行程中')));
           return;
         case InviteMemberStatus.cannotInviteSelf:
           messenger.hideCurrentSnackBar();
-          messenger
-              .showSnackBar(const SnackBar(content: Text('無法邀請自己')));
+          messenger.showSnackBar(const SnackBar(content: Text('無法邀請自己')));
           return;
         case InviteMemberStatus.notOwner:
         case InviteMemberStatus.invalidPermission:
           messenger.hideCurrentSnackBar();
-          messenger.showSnackBar(
-              const SnackBar(content: Text('邀請失敗，請稍後再試')));
+          messenger.showSnackBar(const SnackBar(content: Text('邀請失敗，請稍後再試')));
           return;
       }
     } catch (error) {

@@ -28,12 +28,25 @@ class TripStore extends ChangeNotifier {
   final TripSnapshotCache _snapshotCache = TripSnapshotCache.instance;
 
   Future<void>? _loadFuture;
+  Future<void>? _archivedLoadFuture;
   bool _isLoading = false;
+  bool _isLoadingArchived = false;
   bool _isInitialized = false;
+  bool _areArchivedTripsLoaded = false;
   bool _hasCachedData = false;
   DateTime? _lastSyncedAt;
   Object? _loadError;
+  Object? _archivedLoadError;
   String? _cacheUserId;
+  final Map<String, bool> _archiveStatesReceivedWhileLoading = {};
+  final Map<String, int> _archiveEventGenerations = {};
+  final Map<String, TripPermission> _permissionChangesReceivedWhileLoading = {};
+  final Set<String> _removedTripIdsReceivedWhileLoading = {};
+  final Set<String> _restoredTripIdsBeingLoaded = {};
+  final Map<String, bool> _archiveStatesReceivedWhileRestoring = {};
+  final Map<String, TripPermission> _permissionChangesReceivedWhileRestoring =
+      {};
+  final Set<String> _removedTripIdsReceivedWhileRestoring = {};
 
   /// Monotonically-increasing token that is incremented each time
   /// [clearForSignOut] is called.  [_loadTrips] captures the value at the
@@ -42,13 +55,31 @@ class TripStore extends ChangeNotifier {
   /// load).
   int _sessionToken = 0;
 
+  /// Generation of the active-trip snapshot request. An archived request
+  /// captures this after its active prerequisite completes, so an older
+  /// archived response cannot overwrite a newer active refresh.
+  int _activeLoadGeneration = 0;
+
+  /// Generation of successful local archive or membership mutations. An
+  /// archived request captures this before fetching so it cannot restore a
+  /// stale archived row after the user restored it or left the trip.
+  int _archivedMutationGeneration = 0;
+
   List<TripSummary> get trips => List<TripSummary>.unmodifiable(_trips);
+  List<TripSummary> get activeTrips => List<TripSummary>.unmodifiable(
+        _trips.where((trip) => !trip.isArchived),
+      );
+  List<TripSummary> get archivedTrips => List<TripSummary>.unmodifiable(
+        _trips.where((trip) => trip.isArchived),
+      );
   bool get isLoading => _isLoading;
+  bool get isLoadingArchived => _isLoadingArchived;
   bool get isInitialized => _isInitialized;
   bool get hasCachedData => _hasCachedData;
   bool get isRefreshing => _isLoading && _trips.isNotEmpty;
   DateTime? get lastSyncedAt => _lastSyncedAt;
   Object? get loadError => _loadError;
+  Object? get archivedLoadError => _archivedLoadError;
 
   Future<void> ensureLoaded({bool force = false}) {
     if (_isLoading && _loadFuture != null) {
@@ -65,6 +96,17 @@ class TripStore extends ChangeNotifier {
 
   Future<void> reloadTrips() {
     return ensureLoaded(force: true);
+  }
+
+  Future<void> ensureArchivedTripsLoaded({bool force = false}) {
+    if (_isLoadingArchived && _archivedLoadFuture != null) {
+      return _archivedLoadFuture!;
+    }
+    if (_areArchivedTripsLoaded && !force) return Future.value();
+
+    final future = _loadArchivedTrips();
+    _archivedLoadFuture = future;
+    return future;
   }
 
   TripSummary? findById(String id) {
@@ -127,7 +169,7 @@ class TripStore extends ChangeNotifier {
     );
     updatedTrip = _withSavedCustomStopColor(updatedTrip, savedStop.color);
 
-    _trips[location.tripIndex] = updatedTrip;
+    updatedTrip = _commitTripUpdate(updatedTrip) ?? updatedTrip;
     await _withSessionGuard(
       () => _stopService.reorderStops(
         dayId: location.day.id,
@@ -181,7 +223,7 @@ class TripStore extends ChangeNotifier {
       updatedTrip = _withSavedCustomStopColor(updatedTrip, savedStop.color);
     }
 
-    _trips[location.tripIndex] = updatedTrip;
+    updatedTrip = _commitTripUpdate(updatedTrip) ?? updatedTrip;
     await _withSessionGuard(
       () => _stopService.reorderStops(
         dayId: location.day.id,
@@ -222,13 +264,13 @@ class TripStore extends ChangeNotifier {
     final movedStop = stops.removeAt(oldIndex);
     stops.insert(targetIndex, movedStop);
     final reorderedStops = _normalizeStopsInCurrentOrder(stops);
-    final updatedTrip = _replaceDayAt(
+    var updatedTrip = _replaceDayAt(
       location.trip,
       location.dayIndex,
       location.day.copyWith(stops: reorderedStops),
     );
 
-    _trips[location.tripIndex] = updatedTrip;
+    updatedTrip = _commitTripUpdate(updatedTrip) ?? updatedTrip;
     await _withSessionGuard(
       () => _stopService.reorderStops(
         dayId: location.day.id,
@@ -264,13 +306,13 @@ class TripStore extends ChangeNotifier {
     await _withSessionGuard(() => _stopService.deleteStop(stop.id!));
     final updatedStops = _normalizeStopsInCurrentOrder(
         [...location.day.stops]..removeAt(stopIndex));
-    final updatedTrip = _replaceDayAt(
+    var updatedTrip = _replaceDayAt(
       location.trip,
       location.dayIndex,
       location.day.copyWith(stops: updatedStops),
     );
 
-    _trips[location.tripIndex] = updatedTrip;
+    updatedTrip = _commitTripUpdate(updatedTrip) ?? updatedTrip;
     await _withSessionGuard(
       () => _stopService.reorderStops(
         dayId: location.day.id,
@@ -431,6 +473,45 @@ class TripStore extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> setTripArchived(String tripId, bool isArchived) async {
+    final index = _trips.indexWhere(
+      (trip) => trip.id == tripId && trip.role == TripRole.owner,
+    );
+    if (index == -1) return false;
+
+    final archiveEventGeneration = _archiveEventGenerations[tripId] ?? 0;
+
+    final updated = await _withSessionGuard(
+      () => _tripService.setOwnedTripArchived(tripId, isArchived),
+    );
+    if (!updated) return false;
+
+    _archivedMutationGeneration++;
+
+    // A newer archive event may have arrived from another device while this
+    // RPC was pending. Its state is authoritative, so do not overwrite it
+    // with the older local request after the response returns.
+    if ((_archiveEventGenerations[tripId] ?? 0) != archiveEventGeneration) {
+      return true;
+    }
+
+    final updatedIndex = _trips.indexWhere(
+      (trip) => trip.id == tripId && trip.role == TripRole.owner,
+    );
+    if (updatedIndex == -1) return false;
+
+    final trip = _trips[updatedIndex].copyWith(isArchived: isArchived);
+    _trips[updatedIndex] = trip;
+    if (isArchived) {
+      await NotificationService.instance.cancelTripReminders(tripId);
+    } else {
+      await NotificationService.instance.scheduleTripReminders(trip);
+    }
+    _persistSnapshotInBackground();
+    notifyListeners();
+    return true;
+  }
+
   Future<bool> leaveSharedTrip(String tripId) async {
     final index = _trips
         .indexWhere((trip) => trip.id == tripId && trip.role == TripRole.guest);
@@ -444,7 +525,18 @@ class TripStore extends ChangeNotifier {
       return false;
     }
 
-    _trips.removeAt(index);
+    _archivedMutationGeneration++;
+    final updatedIndex = _trips.indexWhere(
+      (trip) => trip.id == tripId && trip.role == TripRole.guest,
+    );
+    if (updatedIndex == -1) {
+      // The Realtime membership DELETE can win the race with the REST
+      // response. The backend removal still succeeded, so report success.
+      _membersByTripId.remove(tripId);
+      return true;
+    }
+
+    _trips.removeAt(updatedIndex);
     await NotificationService.instance.cancelTripReminders(tripId);
     _persistSnapshotInBackground();
     notifyListeners();
@@ -495,6 +587,7 @@ class TripStore extends ChangeNotifier {
 
   /// Fetch the member list for [tripId] (owner-only operation).
   Future<List<TripMember>> fetchTripMembers(String tripId) async {
+    await _ensureTripIsActive(tripId);
     final members =
         await _withSessionGuard(() => _tripService.fetchTripMembers(tripId));
     _membersByTripId[tripId] = members;
@@ -509,6 +602,7 @@ class TripStore extends ChangeNotifier {
     String userId,
     TripPermission permission,
   ) async {
+    await _ensureTripIsActive(tripId);
     await _withSessionGuard(
       () => _tripService.updateMemberPermission(tripId, userId, permission),
     );
@@ -524,6 +618,7 @@ class TripStore extends ChangeNotifier {
 
   /// Remove a member from the trip (owner-only).
   Future<void> removeMember(String tripId, String userId) async {
+    await _ensureTripIsActive(tripId);
     await _withSessionGuard(() => _tripService.removeMember(tripId, userId));
     final members = _membersByTripId[tripId];
     if (members != null) {
@@ -537,15 +632,29 @@ class TripStore extends ChangeNotifier {
     _sessionToken++;
     _trips.clear();
     _membersByTripId.clear();
+    _archiveStatesReceivedWhileLoading.clear();
+    _archiveEventGenerations.clear();
+    _permissionChangesReceivedWhileLoading.clear();
+    _removedTripIdsReceivedWhileLoading.clear();
+    _restoredTripIdsBeingLoaded.clear();
+    _archiveStatesReceivedWhileRestoring.clear();
+    _permissionChangesReceivedWhileRestoring.clear();
+    _removedTripIdsReceivedWhileRestoring.clear();
     NotificationService.instance.resetForTests();
     _realtimeService.unsubscribe();
     _loadFuture = null;
+    _archivedLoadFuture = null;
     _isLoading = false;
+    _isLoadingArchived = false;
     _isInitialized = false;
+    _areArchivedTripsLoaded = false;
     _hasCachedData = false;
     _lastSyncedAt = null;
     _loadError = null;
+    _archivedLoadError = null;
     _cacheUserId = null;
+    _activeLoadGeneration = 0;
+    _archivedMutationGeneration = 0;
     notifyListeners();
   }
 
@@ -566,14 +675,28 @@ class TripStore extends ChangeNotifier {
     }
     _trips.clear();
     _membersByTripId.clear();
+    _archiveStatesReceivedWhileLoading.clear();
+    _archiveEventGenerations.clear();
+    _permissionChangesReceivedWhileLoading.clear();
+    _removedTripIdsReceivedWhileLoading.clear();
+    _restoredTripIdsBeingLoaded.clear();
+    _archiveStatesReceivedWhileRestoring.clear();
+    _permissionChangesReceivedWhileRestoring.clear();
+    _removedTripIdsReceivedWhileRestoring.clear();
     NotificationService.instance.clearTrackedReminders();
     _loadFuture = null;
+    _archivedLoadFuture = null;
     _isLoading = false;
+    _isLoadingArchived = false;
     _isInitialized = false;
+    _areArchivedTripsLoaded = false;
     _hasCachedData = false;
     _lastSyncedAt = null;
     _loadError = null;
+    _archivedLoadError = null;
     _cacheUserId = null;
+    _activeLoadGeneration = 0;
+    _archivedMutationGeneration = 0;
     notifyListeners();
   }
 
@@ -597,6 +720,7 @@ class TripStore extends ChangeNotifier {
     // while this load is in-flight, the token will be incremented and we will
     // discard the stale results rather than repopulating the store.
     final token = _sessionToken;
+    _activeLoadGeneration++;
     Session? session;
     try {
       session = Supabase.instance.client.auth.currentSession;
@@ -641,21 +765,55 @@ class TripStore extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final loadedTrips = await _withSessionGuard(
-        _tripService.fetchTripsForCurrentUser,
-      );
+      try {
+        await _realtimeService.subscribe(
+          onPermissionChanged: _onPermissionChanged,
+          onRemovedFromTrip: _onRemovedFromTrip,
+          onArchivedChanged: _onArchivedChanged,
+        );
+      } catch (error) {
+        // Realtime improves freshness but must not prevent the REST-backed
+        // trip list from loading when WebSocket access is unavailable.
+        debugPrint('Trip Realtime subscription unavailable: $error');
+      }
+      // A local archive, restore, or leave operation can complete while this
+      // request is hydrating an older active snapshot. Retry instead of
+      // reporting a successful refresh with a discarded, stale response.
+      late List<TripSummary> loadedTrips;
+      while (true) {
+        final archivedMutationGeneration = _archivedMutationGeneration;
+        loadedTrips = await _withSessionGuard(
+          () => _tripService.fetchTripsForCurrentUser(isArchived: false),
+        );
+        if (_sessionToken != token) return;
+        if (_archivedMutationGeneration == archivedMutationGeneration) break;
+      }
 
-      // If the session changed while we were waiting, discard results.
-      if (_sessionToken != token) return;
-
+      final activeIds = {for (final trip in loadedTrips) trip.id};
+      // Keep archived cache entries that the active endpoint cannot confirm.
+      // If the active response contains an ID, it is authoritative: the trip
+      // was restored and must replace its cached archived version.
+      final archivedById = <String, TripSummary>{
+        for (final trip in _trips.where(
+          (trip) => trip.isArchived && !activeIds.contains(trip.id),
+        ))
+          trip.id: trip,
+      };
       _trips
         ..clear()
-        ..addAll(loadedTrips);
+        ..addAll(
+            loadedTrips.where((trip) => !archivedById.containsKey(trip.id)))
+        ..addAll(archivedById.values);
+      _areArchivedTripsLoaded = false;
+      _archivedLoadError = null;
+      if (_applyRealtimeChangesReceivedWhileLoading()) {
+        _persistSnapshotInBackground();
+      }
       _loadError = null;
       _isInitialized = true;
       _hasCachedData = false;
       NotificationService.instance.clearTrackedReminders();
-      for (final trip in _trips) {
+      for (final trip in _trips.where((trip) => !trip.isArchived)) {
         await NotificationService.instance.scheduleTripReminders(trip);
       }
       // Guard again: reminders scheduling is also async.
@@ -664,12 +822,6 @@ class TripStore extends ChangeNotifier {
       final syncedAt = DateTime.now();
       await _snapshotCache.saveForUser(userId, _trips, savedAt: syncedAt);
       _lastSyncedAt = syncedAt;
-
-      // Subscribe to Realtime for permission/removal changes.
-      await _realtimeService.subscribe(
-        onPermissionChanged: _onPermissionChanged,
-        onRemovedFromTrip: _onRemovedFromTrip,
-      );
 
       // Final guard: drop the notifyListeners() if the session changed.
       if (_sessionToken != token) return;
@@ -684,7 +836,66 @@ class TripStore extends ChangeNotifier {
     } finally {
       if (_sessionToken == token) {
         _isLoading = false;
+        if (_applyRealtimeChangesReceivedWhileLoading()) {
+          _persistSnapshotInBackground();
+        }
         _loadFuture = null;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> _loadArchivedTrips() async {
+    final token = _sessionToken;
+    _isLoadingArchived = true;
+    notifyListeners();
+    try {
+      await ensureLoaded();
+      if (_sessionToken != token || !_isInitialized) return;
+
+      // The archived subset can only replace the in-memory active subset if
+      // no newer active refresh has begun since this request's prerequisite
+      // active load completed.
+      final activeLoadGeneration = _activeLoadGeneration;
+      final archivedMutationGeneration = _archivedMutationGeneration;
+
+      final loadedTrips = await _withSessionGuard(
+        () => _tripService.fetchTripsForCurrentUser(isArchived: true),
+      );
+      if (_sessionToken != token ||
+          _activeLoadGeneration != activeLoadGeneration ||
+          _archivedMutationGeneration != archivedMutationGeneration) {
+        return;
+      }
+
+      final loadedById = <String, TripSummary>{
+        for (final trip in loadedTrips) trip.id: trip,
+      };
+      // This response is the authoritative archived subset. Replace matching
+      // stale active rows as well as previously loaded archived rows.
+      for (final trip in _trips.where(
+        (trip) => !trip.isArchived && loadedById.containsKey(trip.id),
+      )) {
+        unawaited(NotificationService.instance.cancelTripReminders(trip.id));
+      }
+      _trips.removeWhere(
+        (trip) => trip.isArchived || loadedById.containsKey(trip.id),
+      );
+      _trips.addAll(loadedById.values);
+      _areArchivedTripsLoaded = true;
+      _archivedLoadError = null;
+      _applyRealtimeChangesReceivedWhileLoading();
+      _persistSnapshotInBackground();
+    } catch (error) {
+      if (_sessionToken != token) return;
+      _archivedLoadError = error;
+    } finally {
+      if (_sessionToken == token) {
+        _isLoadingArchived = false;
+        if (_applyRealtimeChangesReceivedWhileLoading()) {
+          _persistSnapshotInBackground();
+        }
+        _archivedLoadFuture = null;
         notifyListeners();
       }
     }
@@ -791,6 +1002,14 @@ class TripStore extends ChangeNotifier {
   }
 
   void _onPermissionChanged(String tripId, TripPermission permission) {
+    if (_restoredTripIdsBeingLoaded.contains(tripId)) {
+      _permissionChangesReceivedWhileRestoring[tripId] = permission;
+      return;
+    }
+    if (_isLoading || _isLoadingArchived) {
+      _permissionChangesReceivedWhileLoading[tripId] = permission;
+      return;
+    }
     final index = _trips.indexWhere((t) => t.id == tripId);
     if (index == -1) return;
     _trips[index] = _trips[index].copyWith(permission: permission);
@@ -799,6 +1018,13 @@ class TripStore extends ChangeNotifier {
   }
 
   void _onRemovedFromTrip(String tripId) {
+    if (_restoredTripIdsBeingLoaded.contains(tripId)) {
+      _removedTripIdsReceivedWhileRestoring.add(tripId);
+    }
+    if (_isLoading || _isLoadingArchived) {
+      _removedTripIdsReceivedWhileLoading.add(tripId);
+      return;
+    }
     final index = _trips.indexWhere((t) => t.id == tripId);
     if (index == -1) return;
     _trips.removeAt(index);
@@ -808,8 +1034,142 @@ class TripStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _onArchivedChanged(String tripId, bool isArchived) {
+    _archiveEventGenerations[tripId] =
+        (_archiveEventGenerations[tripId] ?? 0) + 1;
+    if (_restoredTripIdsBeingLoaded.contains(tripId)) {
+      _archiveStatesReceivedWhileRestoring[tripId] = isArchived;
+      return;
+    }
+    if (_isLoading || _isLoadingArchived) {
+      _archiveStatesReceivedWhileLoading[tripId] = isArchived;
+      return;
+    }
+    final index = _trips.indexWhere((trip) => trip.id == tripId);
+    if (index == -1) {
+      unawaited(_loadTripForArchiveEvent(tripId));
+      return;
+    }
+    if (_trips[index].isArchived == isArchived) return;
+
+    final trip = _trips[index].copyWith(isArchived: isArchived);
+    _trips[index] = trip;
+    if (isArchived) {
+      unawaited(NotificationService.instance.cancelTripReminders(tripId));
+    } else {
+      unawaited(NotificationService.instance.scheduleTripReminders(trip));
+    }
+    _persistSnapshotInBackground();
+    notifyListeners();
+  }
+
+  bool _applyRealtimeChangesReceivedWhileLoading() {
+    if (_archiveStatesReceivedWhileLoading.isEmpty &&
+        _permissionChangesReceivedWhileLoading.isEmpty &&
+        _removedTripIdsReceivedWhileLoading.isEmpty) {
+      return false;
+    }
+    var changed = false;
+    for (final entry in _archiveStatesReceivedWhileLoading.entries) {
+      final index = _trips.indexWhere((trip) => trip.id == entry.key);
+      if (index == -1) {
+        unawaited(_loadTripForArchiveEvent(entry.key));
+        continue;
+      }
+      if (_trips[index].isArchived == entry.value) continue;
+      final trip = _trips[index].copyWith(isArchived: entry.value);
+      _trips[index] = trip;
+      changed = true;
+      if (entry.value) {
+        unawaited(NotificationService.instance.cancelTripReminders(entry.key));
+      } else {
+        unawaited(NotificationService.instance.scheduleTripReminders(trip));
+      }
+    }
+    for (final entry in _permissionChangesReceivedWhileLoading.entries) {
+      if (_removedTripIdsReceivedWhileLoading.contains(entry.key)) continue;
+      final index = _trips.indexWhere((trip) => trip.id == entry.key);
+      if (index == -1 || _trips[index].permission == entry.value) continue;
+      _trips[index] = _trips[index].copyWith(permission: entry.value);
+      changed = true;
+    }
+    for (final tripId in _removedTripIdsReceivedWhileLoading) {
+      final index = _trips.indexWhere((trip) => trip.id == tripId);
+      if (index == -1) continue;
+      _trips.removeAt(index);
+      _membersByTripId.remove(tripId);
+      unawaited(NotificationService.instance.cancelTripReminders(tripId));
+      changed = true;
+    }
+    // Either response can still be based on a snapshot older than these
+    // Realtime events. Replay them after the other overlapping load commits;
+    // only then is it safe to discard the buffered changes.
+    if (!_isLoading && !_isLoadingArchived) {
+      _archiveStatesReceivedWhileLoading.clear();
+      _permissionChangesReceivedWhileLoading.clear();
+      _removedTripIdsReceivedWhileLoading.clear();
+    }
+    return changed;
+  }
+
+  Future<void> _loadTripForArchiveEvent(String tripId) async {
+    if (!_restoredTripIdsBeingLoaded.add(tripId)) return;
+    final token = _sessionToken;
+    try {
+      final trip = await _withSessionGuard(
+        () => _tripService.fetchTripById(tripId),
+      );
+      if (_sessionToken != token ||
+          trip == null ||
+          (_archiveStatesReceivedWhileRestoring.containsKey(tripId) &&
+              trip.isArchived !=
+                  _archiveStatesReceivedWhileRestoring[tripId]) ||
+          _removedTripIdsReceivedWhileRestoring.contains(tripId)) {
+        return;
+      }
+
+      final restoredPermission =
+          _permissionChangesReceivedWhileRestoring[tripId];
+      final eventTrip = restoredPermission == null
+          ? trip
+          : trip.copyWith(permission: restoredPermission);
+      final index = _trips.indexWhere((item) => item.id == tripId);
+      if (index == -1) {
+        _trips.add(eventTrip);
+      } else {
+        _trips[index] = eventTrip;
+      }
+      if (!eventTrip.isArchived) {
+        unawaited(
+          NotificationService.instance.scheduleTripReminders(eventTrip),
+        );
+      }
+      _persistSnapshotInBackground();
+      notifyListeners();
+    } catch (error) {
+      // A later full refresh will retry this best-effort Realtime repair.
+      debugPrint('Failed to load trip for archive event $tripId: $error');
+    } finally {
+      _restoredTripIdsBeingLoaded.remove(tripId);
+      _archiveStatesReceivedWhileRestoring.remove(tripId);
+      _permissionChangesReceivedWhileRestoring.remove(tripId);
+      _removedTripIdsReceivedWhileRestoring.remove(tripId);
+    }
+  }
+
   Future<void> _refreshTripReminders(TripSummary trip) async {
-    await NotificationService.instance.scheduleTripReminders(trip);
+    final currentTrip = findById(trip.id);
+    if (currentTrip == null || currentTrip.isArchived) return;
+    await NotificationService.instance.scheduleTripReminders(currentTrip);
+  }
+
+  Future<void> _ensureTripIsActive(String tripId) async {
+    await ensureLoaded();
+    final trip = findById(tripId) ??
+        await _withSessionGuard(() => _tripService.fetchTripById(tripId));
+    if (trip == null || trip.isArchived) {
+      throw StateError('Archived trips cannot manage members.');
+    }
   }
 
   Future<StopItem> _saveStop(String dayId, StopItem stop) async {
@@ -950,6 +1310,18 @@ class TripStore extends ChangeNotifier {
       trip: trip,
       day: trip.days[dayIndex],
     );
+  }
+
+  /// Commits a content mutation without losing an archive event that arrived
+  /// while the mutation was awaiting its backend write.
+  TripSummary? _commitTripUpdate(TripSummary candidate) {
+    final index = _trips.indexWhere((trip) => trip.id == candidate.id);
+    if (index == -1) return null;
+
+    final current = _trips[index];
+    final merged = candidate.copyWith(isArchived: current.isArchived);
+    _trips[index] = merged;
+    return merged;
   }
 
   TripSummary _replaceDayAt(TripSummary trip, int dayIndex, TripDay day) {

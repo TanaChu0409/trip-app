@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:trip_planner_app/core/theme/app_theme.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 
-enum TripCardAction { deleteTrip, leaveTrip }
+enum TripCardAction { archiveTrip, restoreTrip, deleteTrip, leaveTrip }
 
 class TripCard extends StatelessWidget {
   const TripCard({
@@ -10,11 +10,13 @@ class TripCard extends StatelessWidget {
     required this.trip,
     required this.onTap,
     required this.onActionSelected,
+    this.showActions = true,
   });
 
   final TripSummary trip;
   final VoidCallback onTap;
   final ValueChanged<TripCardAction> onActionSelected;
+  final bool showActions;
 
   @override
   Widget build(BuildContext context) {
@@ -64,31 +66,40 @@ class TripCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Chip(
                     label: Text(
-                      switch (trip.role) {
-                        TripRole.owner => '擁有者',
-                        TripRole.guest =>
-                          trip.permission == TripPermission.editor
-                              ? '可編輯'
-                              : '唯讀',
-                      },
+                      trip.isArchived
+                          ? '已封存'
+                          : switch (trip.role) {
+                              TripRole.owner => '擁有者',
+                              TripRole.guest =>
+                                trip.permission == TripPermission.editor
+                                    ? '可編輯'
+                                    : '唯讀',
+                            },
                     ),
                   ),
-                  PopupMenuButton<TripCardAction>(
-                    tooltip: '旅程操作',
-                    onSelected: onActionSelected,
-                    itemBuilder: (context) => [
-                      if (trip.role == TripRole.owner)
-                        const PopupMenuItem(
-                          value: TripCardAction.deleteTrip,
-                          child: Text('刪除旅程'),
-                        )
-                      else
-                        const PopupMenuItem(
-                          value: TripCardAction.leaveTrip,
-                          child: Text('退出旅程'),
-                        ),
-                    ],
-                  ),
+                  if (showActions)
+                    PopupMenuButton<TripCardAction>(
+                      tooltip: '旅程操作',
+                      onSelected: onActionSelected,
+                      itemBuilder: (context) => [
+                        if (trip.role == TripRole.owner) ...[
+                          PopupMenuItem(
+                            value: trip.isArchived
+                                ? TripCardAction.restoreTrip
+                                : TripCardAction.archiveTrip,
+                            child: Text(trip.isArchived ? '還原旅程' : '封存旅程'),
+                          ),
+                          const PopupMenuItem(
+                            value: TripCardAction.deleteTrip,
+                            child: Text('刪除旅程'),
+                          ),
+                        ] else
+                          const PopupMenuItem(
+                            value: TripCardAction.leaveTrip,
+                            child: Text('退出旅程'),
+                          ),
+                      ],
+                    ),
                 ],
               ),
               const SizedBox(height: 10),
@@ -113,11 +124,12 @@ class TripCard extends StatelessWidget {
                   ),
                   _MetaPill(
                     label: switch (trip.role) {
-                      TripRole.owner => '我的旅程',
-                      TripRole.guest =>
-                        trip.permission == TripPermission.editor
-                            ? '協作中'
-                            : '唯讀分享',
+                      TripRole.owner => trip.isArchived ? '封存閱讀' : '我的旅程',
+                      TripRole.guest => trip.permission == TripPermission.editor
+                          ? trip.isArchived
+                              ? '封存閱讀'
+                              : '協作中'
+                          : '唯讀分享',
                     },
                     backgroundColor: tripColorSoft,
                     textColor: tripColorStrong,

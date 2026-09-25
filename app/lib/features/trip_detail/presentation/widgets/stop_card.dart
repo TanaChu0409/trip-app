@@ -10,6 +10,7 @@ class StopCard extends StatelessWidget {
     required this.stop,
     required this.tripColor,
     required this.isReadOnly,
+    this.isArchived = false,
     this.onTap,
     this.trailing,
   });
@@ -17,6 +18,7 @@ class StopCard extends StatelessWidget {
   final StopItem stop;
   final String? tripColor;
   final bool isReadOnly;
+  final bool isArchived;
   final VoidCallback? onTap;
   final Widget? trailing;
 
@@ -117,8 +119,7 @@ class StopCard extends StatelessWidget {
                         child: ListView.separated(
                           scrollDirection: Axis.horizontal,
                           itemCount: stop.photos.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(width: 6),
+                          separatorBuilder: (_, __) => const SizedBox(width: 6),
                           itemBuilder: (context, index) {
                             final photo = stop.photos[index];
                             return GestureDetector(
@@ -206,9 +207,11 @@ class StopCard extends StatelessWidget {
                     ],
                     const SizedBox(height: 8),
                     Text(
-                      isReadOnly
-                          ? '唯讀模式仍可接收通知與使用導航模式。'
-                          : '點擊可編輯，長按拖曳可調整順序。',
+                      isArchived
+                          ? '此旅程已封存，僅供瀏覽。'
+                          : isReadOnly
+                              ? '唯讀模式仍可接收通知與使用導航模式。'
+                              : '點擊可編輯，長按拖曳可調整順序。',
                     ),
                   ],
                 ),
@@ -282,8 +285,7 @@ class _PhotoPreviewDialogState extends State<_PhotoPreviewDialog> {
           PageView.builder(
             controller: _pageController,
             itemCount: widget.photos.length,
-            onPageChanged: (index) =>
-                setState(() => _currentIndex = index),
+            onPageChanged: (index) => setState(() => _currentIndex = index),
             itemBuilder: (context, index) {
               return InteractiveViewer(
                 maxScale: 4.0,
@@ -347,9 +349,8 @@ class _PhotoPreviewDialogState extends State<_PhotoPreviewDialog> {
                       width: i == _currentIndex ? 16 : 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: i == _currentIndex
-                            ? Colors.white
-                            : Colors.white38,
+                        color:
+                            i == _currentIndex ? Colors.white : Colors.white38,
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -361,4 +362,3 @@ class _PhotoPreviewDialogState extends State<_PhotoPreviewDialog> {
     );
   }
 }
-
