@@ -39,6 +39,7 @@ class TripStore extends ChangeNotifier {
   Object? _archivedLoadError;
   String? _cacheUserId;
   final Map<String, bool> _archiveStatesReceivedWhileLoading = {};
+  final Map<String, int> _archiveEventGenerations = {};
   final Map<String, TripPermission> _permissionChangesReceivedWhileLoading = {};
   final Set<String> _removedTripIdsReceivedWhileLoading = {};
   final Set<String> _restoredTripIdsBeingLoaded = {};
@@ -478,12 +479,21 @@ class TripStore extends ChangeNotifier {
     );
     if (index == -1) return false;
 
+    final archiveEventGeneration = _archiveEventGenerations[tripId] ?? 0;
+
     final updated = await _withSessionGuard(
       () => _tripService.setOwnedTripArchived(tripId, isArchived),
     );
     if (!updated) return false;
 
     _archivedMutationGeneration++;
+
+    // A newer archive event may have arrived from another device while this
+    // RPC was pending. Its state is authoritative, so do not overwrite it
+    // with the older local request after the response returns.
+    if ((_archiveEventGenerations[tripId] ?? 0) != archiveEventGeneration) {
+      return true;
+    }
 
     final updatedIndex = _trips.indexWhere(
       (trip) => trip.id == tripId && trip.role == TripRole.owner,
@@ -519,7 +529,12 @@ class TripStore extends ChangeNotifier {
     final updatedIndex = _trips.indexWhere(
       (trip) => trip.id == tripId && trip.role == TripRole.guest,
     );
-    if (updatedIndex == -1) return false;
+    if (updatedIndex == -1) {
+      // The Realtime membership DELETE can win the race with the REST
+      // response. The backend removal still succeeded, so report success.
+      _membersByTripId.remove(tripId);
+      return true;
+    }
 
     _trips.removeAt(updatedIndex);
     await NotificationService.instance.cancelTripReminders(tripId);
@@ -618,6 +633,7 @@ class TripStore extends ChangeNotifier {
     _trips.clear();
     _membersByTripId.clear();
     _archiveStatesReceivedWhileLoading.clear();
+    _archiveEventGenerations.clear();
     _permissionChangesReceivedWhileLoading.clear();
     _removedTripIdsReceivedWhileLoading.clear();
     _restoredTripIdsBeingLoaded.clear();
@@ -660,6 +676,7 @@ class TripStore extends ChangeNotifier {
     _trips.clear();
     _membersByTripId.clear();
     _archiveStatesReceivedWhileLoading.clear();
+    _archiveEventGenerations.clear();
     _permissionChangesReceivedWhileLoading.clear();
     _removedTripIdsReceivedWhileLoading.clear();
     _restoredTripIdsBeingLoaded.clear();
@@ -1018,6 +1035,8 @@ class TripStore extends ChangeNotifier {
   }
 
   void _onArchivedChanged(String tripId, bool isArchived) {
+    _archiveEventGenerations[tripId] =
+        (_archiveEventGenerations[tripId] ?? 0) + 1;
     if (_restoredTripIdsBeingLoaded.contains(tripId)) {
       _archiveStatesReceivedWhileRestoring[tripId] = isArchived;
       return;

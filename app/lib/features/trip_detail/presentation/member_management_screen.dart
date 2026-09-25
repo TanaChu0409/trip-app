@@ -18,6 +18,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   bool _wasArchived = false;
+  bool _reloadAfterCurrentLoad = false;
 
   @override
   void initState() {
@@ -50,8 +51,15 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
     // Membership can change while the archived screen is shown (for example,
     // when a guest leaves). Always reload when the trip is restored instead of
     // reusing the pre-archive cache.
-    if (becameActive && !_isLoading) {
-      _loadMembers();
+    if (becameActive) {
+      if (_isLoading) {
+        // The in-flight response may have read the member list before guests
+        // left during archive mode. Reload once it completes so it cannot
+        // repopulate this screen with stale members.
+        _reloadAfterCurrentLoad = true;
+      } else {
+        _loadMembers();
+      }
     }
   }
 
@@ -76,6 +84,10 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
         });
       }
     }
+
+    if (!mounted || !_reloadAfterCurrentLoad) return;
+    _reloadAfterCurrentLoad = false;
+    _loadMembers();
   }
 
   Future<void> _changePermission(
