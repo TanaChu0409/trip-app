@@ -55,9 +55,10 @@ as $$
     );
 $$;
 
-revoke all on function public.can_read_trip_peer_profile(uuid, uuid) from public;
-grant execute on function public.can_read_trip_peer_profile(uuid, uuid) to authenticated;
-grant execute on function public.can_read_trip_peer_profile(uuid, uuid) to service_role;
+revoke all on function public.can_read_trip_peer_profile(uuid, uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.can_read_trip_peer_profile(uuid, uuid)
+  to authenticated;
 
 drop policy if exists "profiles_read_trip_peer" on public.profiles;
 create policy "profiles_read_trip_peer"
@@ -71,9 +72,13 @@ using (public.can_read_trip_peer_profile(id, auth.uid()));
 -- This ensures that even with the peer-read RLS policy above, authenticated
 -- users cannot read the email column by querying profiles directly.
 -- (service_role retains full access via its own Supabase-managed grants.)
-revoke select on public.profiles from authenticated, anon;
+revoke all on table public.profiles
+  from public, anon, authenticated, service_role;
 grant select (id, display_name, avatar_url, created_at, updated_at)
-  on public.profiles to authenticated;
+  on table public.profiles to authenticated;
+grant update (display_name, email, avatar_url, updated_at)
+  on table public.profiles to authenticated;
+grant select, insert, update, delete on table public.profiles to service_role;
 
 -- ── Step 3: Recreate profiles_public with security_invoker = true ────────────
 -- The view keeps the same membership rules as migration 015, but delegates the
@@ -94,5 +99,6 @@ where auth.uid() is not null
     or public.can_read_trip_peer_profile(p.id, auth.uid())
   );
 
-revoke all on public.profiles_public from public;
-grant select on public.profiles_public to authenticated;
+revoke all on table public.profiles_public
+  from public, anon, authenticated, service_role;
+grant select on table public.profiles_public to authenticated, service_role;

@@ -55,5 +55,6 @@ where auth.uid() is not null
     )
   );
 
-revoke all on public.profiles_public from public;
-grant select on public.profiles_public to authenticated;
+revoke all on table public.profiles_public
+  from public, anon, authenticated, service_role;
+grant select on table public.profiles_public to authenticated, service_role;

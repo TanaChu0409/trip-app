@@ -1,5 +1,15 @@
 create extension if not exists pgcrypto;
 
+-- Supabase projects may be configured to grant public-schema objects to API
+-- roles automatically. Keep future objects private until a migration grants
+-- the exact privileges the application needs.
+alter default privileges for role postgres in schema public
+  revoke all on tables from anon, authenticated, service_role;
+alter default privileges for role postgres in schema public
+  revoke all on sequences from anon, authenticated, service_role;
+alter default privileges for role postgres in schema public
+  revoke execute on functions from public, anon, authenticated, service_role;
+
 create table if not exists public.trips (
   id uuid primary key default gen_random_uuid(),
   title text not null,
@@ -68,6 +78,22 @@ alter table public.days enable row level security;
 alter table public.stops enable row level security;
 alter table public.parking_spots enable row level security;
 alter table public.shared_access enable row level security;
+
+revoke all on table
+  public.trips,
+  public.days,
+  public.stops,
+  public.parking_spots,
+  public.shared_access
+from public, anon, authenticated, service_role;
+
+grant select, insert, update, delete on table
+  public.trips,
+  public.days,
+  public.stops,
+  public.parking_spots,
+  public.shared_access
+to authenticated, service_role;
 
 create policy "trips_owner_all"
 on public.trips

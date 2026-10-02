@@ -18,6 +18,10 @@ as $$
   );
 $$;
 
+revoke all on function public.is_trip_editor(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.is_trip_editor(uuid) to authenticated;
+
 -- ── days ────────────────────────────────────────────────────────────────────
 
 drop policy if exists "days_editor_all" on public.days;

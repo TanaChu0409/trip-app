@@ -20,6 +20,10 @@ as $$
   );
 $$;
 
+revoke all on function public.is_trip_owner(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.is_trip_owner(uuid) to authenticated;
+
 -- Recreate shared_access owner policies using the recursion-safe function
 drop policy if exists "shared_access_owner_read" on public.shared_access;
 create policy "shared_access_owner_read"

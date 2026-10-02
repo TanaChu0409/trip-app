@@ -77,9 +77,18 @@ begin
 end;
 $$;
 
-revoke all on function public.can_edit_trip(uuid) from public;
-revoke all on function public.add_custom_stop_color(uuid, text) from public;
-revoke all on function public.remove_trip_custom_stop_color(uuid, text) from public;
-revoke all on function public.create_stop_with_palette(uuid, jsonb) from public;
-revoke all on function public.update_stop_with_palette(uuid, jsonb) from public;
-grant execute on function public.remove_trip_custom_stop_color(uuid, text), public.create_stop_with_palette(uuid, jsonb), public.update_stop_with_palette(uuid, jsonb) to authenticated;
+revoke all on function public.can_edit_trip(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.add_custom_stop_color(uuid, text)
+  from public, anon, authenticated, service_role;
+revoke all on function public.remove_trip_custom_stop_color(uuid, text)
+  from public, anon, authenticated, service_role;
+revoke all on function public.create_stop_with_palette(uuid, jsonb)
+  from public, anon, authenticated, service_role;
+revoke all on function public.update_stop_with_palette(uuid, jsonb)
+  from public, anon, authenticated, service_role;
+grant execute on function
+  public.remove_trip_custom_stop_color(uuid, text),
+  public.create_stop_with_palette(uuid, jsonb),
+  public.update_stop_with_palette(uuid, jsonb)
+to authenticated, service_role;

@@ -36,4 +36,5 @@ create trigger stops_sync_custom_color_palette
 after insert or update of color on public.stops
 for each row execute function public.sync_trip_custom_stop_color();
 
-revoke all on function public.sync_trip_custom_stop_color() from public;
+revoke all on function public.sync_trip_custom_stop_color()
+  from public, anon, authenticated, service_role;
