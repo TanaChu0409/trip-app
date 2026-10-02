@@ -7,8 +7,12 @@ alter default privileges for role postgres in schema public
   revoke all on tables from anon, authenticated, service_role;
 alter default privileges for role postgres in schema public
   revoke all on sequences from anon, authenticated, service_role;
+-- Function EXECUTE is granted to PUBLIC by PostgreSQL's global defaults.
+-- Revoke it globally because per-schema defaults can only add privileges.
+alter default privileges for role postgres
+  revoke execute on functions from public;
 alter default privileges for role postgres in schema public
-  revoke execute on functions from public, anon, authenticated, service_role;
+  revoke execute on functions from anon, authenticated, service_role;
 
 create table if not exists public.trips (
   id uuid primary key default gen_random_uuid(),

@@ -140,6 +140,10 @@ with functions(signature, access_class) as (
     (
       (access_class = 'app_rpc' and role_name in ('authenticated', 'service_role'))
       or (access_class = 'policy_helper' and role_name = 'authenticated')
+      or (
+        signature = 'public.can_read_trip_peer_profile(uuid,uuid)'
+        and role_name = 'service_role'
+      )
       or (access_class = 'purge' and role_name = 'service_role')
     ) as allowed
   from functions
@@ -161,10 +165,22 @@ select extensions.ok(
     cross join lateral aclexplode(d.defaclacl) acl
     left join pg_roles grantee_role on grantee_role.oid = acl.grantee
     where owner_role.rolname = 'postgres'
-      and n.nspname = 'public'
-      and (acl.grantee = 0 or grantee_role.rolname in ('anon', 'authenticated', 'service_role'))
+      and (
+        (
+          d.defaclnamespace = 0
+          and d.defaclobjtype = 'f'
+          and acl.grantee = 0
+        )
+        or (
+          n.nspname = 'public'
+          and (
+            acl.grantee = 0
+            or grantee_role.rolname in ('anon', 'authenticated', 'service_role')
+          )
+        )
+      )
   ),
-  'postgres public-schema default privileges do not expose future objects'
+  'postgres global function and public-schema defaults do not expose future objects'
 );
 
 select extensions.is(

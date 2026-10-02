@@ -7,8 +7,10 @@ alter default privileges for role postgres in schema public
   revoke all on tables from anon, authenticated, service_role;
 alter default privileges for role postgres in schema public
   revoke all on sequences from anon, authenticated, service_role;
+alter default privileges for role postgres
+  revoke execute on functions from public;
 alter default privileges for role postgres in schema public
-  revoke execute on functions from public, anon, authenticated, service_role;
+  revoke execute on functions from anon, authenticated, service_role;
 
 -- App data tables: anon has no direct access. RLS remains the row-level
 -- boundary for authenticated users, while service_role keeps administrative
@@ -102,7 +104,8 @@ grant execute on function
 to authenticated, service_role;
 
 -- Helpers called by authenticated RLS and Storage policies. service_role
--- bypasses RLS and internal SECURITY DEFINER calls execute as their owner.
+-- bypasses table RLS, but needs the profile helper because profiles_public is
+-- a security-invoker view that evaluates it directly.
 revoke all on function public.is_trip_owner(uuid)
   from public, anon, authenticated, service_role;
 revoke all on function public.is_trip_editor(uuid)
@@ -130,6 +133,9 @@ grant execute on function
   public.storage_stop_id(text),
   public.can_read_trip_peer_profile(uuid, uuid)
 to authenticated;
+
+grant execute on function public.can_read_trip_peer_profile(uuid, uuid)
+  to service_role;
 
 -- Purge functions are maintenance-only.
 revoke all on function public.purge_join_code_attempts()
