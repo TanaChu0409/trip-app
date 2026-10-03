@@ -1,0 +1,43 @@
+name: Supabase database
+
+on:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase-database.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      DO_NOT_TRACK: "1"
+      SUPABASE_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.119.0
+
+      - name: Start local Supabase
+        run: supabase start
+
+      - name: Replay migrations from scratch
+        run: supabase db reset --local --no-seed
+
+      - name: Run pgTAP database tests
+        run: supabase test db --local
+
+      - name: Lint database
+        run: supabase db lint --local --schema public --level warning --fail-on error
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup

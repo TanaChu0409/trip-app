@@ -33,5 +33,7 @@ begin
 end;
 $$;
 
-revoke all on function public.update_trip_color(uuid, text) from public;
-grant execute on function public.update_trip_color(uuid, text) to authenticated;
+revoke all on function public.update_trip_color(uuid, text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.update_trip_color(uuid, text)
+  to authenticated, service_role;

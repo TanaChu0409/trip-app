@@ -25,6 +25,11 @@ create index if not exists idx_invite_member_attempts_user_time
 alter table public.invite_member_attempts enable row level security;
 -- No direct client access needed; only the SECURITY DEFINER function writes to it.
 
+revoke all on table public.invite_member_attempts
+  from public, anon, authenticated, service_role;
+grant select, insert, update, delete on table public.invite_member_attempts
+  to service_role;
+
 -- Purge attempts older than 24 hours to keep the table small.
 -- Schedule `select public.purge_invite_member_attempts();` on an interval (for
 -- example, hourly) to enforce retention.
@@ -38,7 +43,8 @@ as $$
   where attempted_at < now() - interval '24 hours';
 $$;
 
-revoke all on function public.purge_invite_member_attempts() from public;
+revoke all on function public.purge_invite_member_attempts()
+  from public, anon, authenticated, service_role;
 grant execute on function public.purge_invite_member_attempts() to service_role;
 
 create or replace function public.invite_member_by_email(
@@ -163,6 +169,7 @@ begin
 end;
 $$;
 
--- Only authenticated users need to call this; service_role inherits implicitly.
-revoke all on function public.invite_member_by_email(uuid, text, text) from public;
-grant execute on function public.invite_member_by_email(uuid, text, text) to authenticated;
+revoke all on function public.invite_member_by_email(uuid, text, text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.invite_member_by_email(uuid, text, text)
+  to authenticated, service_role;

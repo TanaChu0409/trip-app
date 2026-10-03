@@ -15,6 +15,10 @@ as $$
   );
 $$;
 
+revoke all on function public.is_active_trip_owner(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.is_active_trip_owner(uuid) to authenticated;
+
 create or replace function public.is_trip_editor(p_trip_id uuid)
 returns boolean
 language sql
@@ -33,6 +37,10 @@ as $$
   );
 $$;
 
+revoke all on function public.is_trip_editor(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.is_trip_editor(uuid) to authenticated;
+
 create or replace function public.can_edit_trip(p_trip_id uuid)
 returns boolean
 language sql
@@ -48,6 +56,9 @@ as $$
       and (t.owner_id = auth.uid() or public.is_trip_editor(p_trip_id))
   );
 $$;
+
+revoke all on function public.can_edit_trip(uuid)
+  from public, anon, authenticated, service_role;
 
 create or replace function public.update_trip_color(
   p_trip_id uuid,
@@ -69,6 +80,11 @@ begin
   where id = p_trip_id;
 end;
 $$;
+
+revoke all on function public.update_trip_color(uuid, text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.update_trip_color(uuid, text)
+  to authenticated, service_role;
 
 -- Client roles may update a trip only through narrowly scoped SECURITY
 -- DEFINER functions. This prevents stale clients from modifying archived rows.
@@ -113,8 +129,10 @@ begin
 end;
 $$;
 
-revoke all on function public.set_owned_trip_archived(uuid, boolean) from public;
-grant execute on function public.set_owned_trip_archived(uuid, boolean) to authenticated;
+revoke all on function public.set_owned_trip_archived(uuid, boolean)
+  from public, anon, authenticated, service_role;
+grant execute on function public.set_owned_trip_archived(uuid, boolean)
+  to authenticated, service_role;
 
 -- Keep archived child rows readable, while denying all direct content writes.
 -- Editors are covered by is_trip_editor above; these policies add the same
@@ -259,6 +277,10 @@ as $$
   );
 $$;
 
+revoke all on function public.is_stop_trip_owner(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.is_stop_trip_owner(uuid) to authenticated;
+
 -- Existing members can still leave an archived trip themselves, but owners
 -- and stale clients cannot change membership until the trip is restored.
 drop policy if exists "shared_access_owner_update" on public.shared_access;
@@ -310,6 +332,9 @@ begin
   return new;
 end;
 $$;
+
+revoke all on function public.prevent_archived_trip_membership_changes()
+  from public, anon, authenticated, service_role;
 
 drop trigger if exists prevent_archived_trip_membership_changes on public.shared_access;
 create trigger prevent_archived_trip_membership_changes

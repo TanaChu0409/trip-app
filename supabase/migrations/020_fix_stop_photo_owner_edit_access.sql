@@ -18,3 +18,7 @@ as $$
         and public.is_trip_editor(days.trip_id)
     );
 $$;
+
+revoke all on function public.can_edit_stop(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.can_edit_stop(uuid) to authenticated;

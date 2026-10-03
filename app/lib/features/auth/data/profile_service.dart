@@ -23,17 +23,16 @@ class ProfileService {
     ];
   }
 
-  /// Ensure the current user has a profile row (idempotent upsert).
+  /// Refresh the current user's trigger-created profile row.
   /// Call this after a successful sign-in.
   Future<void> upsertCurrentUserProfile() async {
     final user = _client.auth.currentUser;
     if (user == null) return;
     final meta = user.userMetadata ?? {};
-    await _client.from('profiles').upsert({
-      'id': user.id,
+    await _client.from('profiles').update({
       'display_name': meta['full_name'] ?? meta['name'],
       'email': user.email,
       'avatar_url': meta['avatar_url'],
-    });
+    }).eq('id', user.id);
   }
 }

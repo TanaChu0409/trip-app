@@ -12,6 +12,14 @@ create table if not exists public.profiles (
 
 alter table public.profiles enable row level security;
 
+revoke all on table public.profiles
+  from public, anon, authenticated, service_role;
+grant select (id, display_name, avatar_url, created_at, updated_at)
+  on table public.profiles to authenticated;
+grant update (display_name, email, avatar_url, updated_at)
+  on table public.profiles to authenticated;
+grant select, insert, update, delete on table public.profiles to service_role;
+
 -- Any authenticated user may read any profile (needed for member lists).
 create policy "profiles_read_authenticated"
 on public.profiles
@@ -48,6 +56,9 @@ begin
   return new;
 end;
 $$;
+
+revoke all on function public.handle_new_user()
+  from public, anon, authenticated, service_role;
 
 create or replace trigger on_auth_user_created
   after insert on auth.users

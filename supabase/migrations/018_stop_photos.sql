@@ -13,6 +13,11 @@ create table if not exists public.stop_photos (
 
 alter table public.stop_photos enable row level security;
 
+revoke all on table public.stop_photos
+  from public, anon, authenticated, service_role;
+grant select, insert, update, delete on table public.stop_photos
+  to authenticated, service_role;
+
 -- ── RLS helpers (reuse is_trip_editor from migration 010) ─────────────────
 
 -- Helper to check if the current user is the trip owner for a given stop.
@@ -33,6 +38,10 @@ as $$
   );
 $$;
 
+revoke all on function public.is_stop_trip_owner(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.is_stop_trip_owner(uuid) to authenticated;
+
 create or replace function public.can_edit_stop(p_stop_id uuid)
 returns boolean
 language sql
@@ -49,10 +58,15 @@ as $$
   );
 $$;
 
+revoke all on function public.can_edit_stop(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.can_edit_stop(uuid) to authenticated;
+
 create or replace function public.storage_stop_id(p_name text)
 returns uuid
 language sql
 immutable
+set search_path = pg_catalog
 as $$
   select case
     when split_part(p_name, '/', 3) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
@@ -60,6 +74,10 @@ as $$
     else null
   end
 $$;
+
+revoke all on function public.storage_stop_id(text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.storage_stop_id(text) to authenticated;
 
 -- Helper to check if the current user can read a stop
 -- (owner OR any shared_access member).
@@ -86,6 +104,10 @@ as $$
       )
   );
 $$;
+
+revoke all on function public.can_read_stop(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.can_read_stop(uuid) to authenticated;
 
 create or replace function public.enforce_stop_photo_limit()
 returns trigger
@@ -114,6 +136,9 @@ begin
   return new;
 end;
 $$;
+
+revoke all on function public.enforce_stop_photo_limit()
+  from public, anon, authenticated, service_role;
 
 drop trigger if exists enforce_stop_photo_limit on public.stop_photos;
 create trigger enforce_stop_photo_limit

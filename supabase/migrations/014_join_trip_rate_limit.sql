@@ -18,6 +18,11 @@ create index if not exists idx_join_code_attempts_user_time
 alter table public.join_code_attempts enable row level security;
 -- No direct client access needed; only the SECURITY DEFINER function writes to it.
 
+revoke all on table public.join_code_attempts
+  from public, anon, authenticated, service_role;
+grant select, insert, update, delete on table public.join_code_attempts
+  to service_role;
+
 -- Purge attempts older than 24 hours to keep the table small.
 -- This must be invoked by an explicit scheduled job (for example, Supabase cron);
 -- indexes improve lookup performance but do not remove old rows automatically.
@@ -34,7 +39,8 @@ as $$
   where attempted_at < now() - interval '24 hours';
 $$;
 
-revoke all on function public.purge_join_code_attempts() from public;
+revoke all on function public.purge_join_code_attempts()
+  from public, anon, authenticated, service_role;
 grant execute on function public.purge_join_code_attempts() to service_role;
 
 -- Recreate join_trip_by_code with rate limiting.
@@ -137,5 +143,7 @@ begin
 end;
 $$;
 
-revoke all on function public.join_trip_by_code(text) from public;
-grant execute on function public.join_trip_by_code(text) to authenticated;
+revoke all on function public.join_trip_by_code(text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.join_trip_by_code(text)
+  to authenticated, service_role;
