@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:trip_planner_app/features/trips/data/trip_invite_link.dart';
 import 'package:trip_planner_app/features/trips/data/invite_member_result.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_member.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
@@ -8,6 +9,15 @@ class TripService {
   TripService._();
 
   static final TripService instance = TripService._();
+
+  Future<TripInviteLinkResult> inviteLinkRpc(
+      String function, Map<String, dynamic> params) async {
+    final response = await _client.rpc(function, params: params);
+    if (response is! Map) {
+      throw const FormatException('Invalid invitation response');
+    }
+    return TripInviteLinkResult.fromJson(Map<String, dynamic>.from(response));
+  }
 
   SupabaseClient get _client => Supabase.instance.client;
 

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:trip_planner_app/core/router/invite_link_controller.dart';
 import 'package:trip_planner_app/app.dart';
 import 'package:trip_planner_app/core/supabase/supabase_config.dart';
 import 'package:trip_planner_app/core/supabase/supabase_error_formatter.dart';
@@ -9,8 +11,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    final invites = InviteLinkController(await SharedPreferences.getInstance());
+    await invites.initialize();
     await AppSupabaseConfig.initialize();
-    runApp(const ProviderScope(child: TripPlannerApp()));
+    runApp(ProviderScope(
+        overrides: [inviteLinkControllerProvider.overrideWithValue(invites)],
+        child: const TripPlannerApp()));
   } catch (error, stackTrace) {
     FlutterError.reportError(
       FlutterErrorDetails(
@@ -63,7 +69,7 @@ class _StartupFailureApp extends StatelessWidget {
                         const Text('建議檢查：'),
                         const SizedBox(height: 8),
                         const Text(
-                          '1. 啟動或 build 時是否透過 --dart-define 或 --dart-define-from-file 提供 SUPABASE_URL、SUPABASE_ANON_KEY'),
+                            '1. 啟動或 build 時是否透過 --dart-define 或 --dart-define-from-file 提供 SUPABASE_URL、SUPABASE_ANON_KEY'),
                         const Text('2. Supabase SQL migrations 是否已完整執行'),
                         const Text('3. 本機網路是否能連到 Supabase 專案'),
                         const SizedBox(height: 16),
