@@ -826,6 +826,7 @@ class _InviteMemberSheet extends StatefulWidget {
 
 class _InviteMemberSheetState extends State<_InviteMemberSheet> {
   bool _linkMode = false;
+  bool _hasOpenedLinks = false;
   final TextEditingController _emailController = TextEditingController();
   TripPermission _selectedPermission = TripPermission.editor;
   bool _isSubmitting = false;
@@ -864,8 +865,15 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
                 },
                 onSelectionChanged: _isSubmitting
                     ? null
-                    : (values) => setState(() => _linkMode = values.first)),
-            if (_linkMode) InviteLinkPanel(tripId: widget.tripId),
+                    : (values) => setState(() {
+                          _linkMode = values.first;
+                          _hasOpenedLinks |= _linkMode;
+                        })),
+            if (_hasOpenedLinks)
+              Visibility(
+                  visible: _linkMode,
+                  maintainState: true,
+                  child: InviteLinkPanel(tripId: widget.tripId)),
             if (!_linkMode) ...[
               const SizedBox(height: 8),
               const Text('輸入對方的 Email 地址邀請加入行程。'),

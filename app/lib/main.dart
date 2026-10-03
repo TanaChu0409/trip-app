@@ -11,9 +11,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    // Supabase must receive cold-start OAuth links before the invite listener
+    // subscribes to AppLinks' shared broadcast stream.
+    await AppSupabaseConfig.initialize();
     final invites = InviteLinkController(await SharedPreferences.getInstance());
     await invites.initialize();
-    await AppSupabaseConfig.initialize();
     runApp(ProviderScope(
         overrides: [inviteLinkControllerProvider.overrideWithValue(invites)],
         child: const TripPlannerApp()));

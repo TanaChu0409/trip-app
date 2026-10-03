@@ -29,6 +29,7 @@ class InviteLinkPanel extends ConsumerStatefulWidget {
 class _InviteLinkPanelState extends ConsumerState<InviteLinkPanel> {
   bool _busy = true;
   bool _active = false;
+  bool _uncertain = false;
   String? _url;
   String? _error;
   bool _loaded = false;
@@ -59,6 +60,7 @@ class _InviteLinkPanelState extends ConsumerState<InviteLinkPanel> {
       if (mounted) {
         setState(() {
           _active = result.active;
+          _uncertain = false;
           _permission = result.permission ?? TripPermission.viewer;
           _loaded = true;
         });
@@ -92,6 +94,8 @@ class _InviteLinkPanelState extends ConsumerState<InviteLinkPanel> {
     setState(() {
       _busy = true;
       _error = null;
+      // A failed response does not imply that the server rolled back.
+      _url = null;
     });
     try {
       final result = revoke
@@ -107,11 +111,16 @@ class _InviteLinkPanelState extends ConsumerState<InviteLinkPanel> {
         setState(() {
           _url = url;
           _active = !revoke;
+          _uncertain = false;
         });
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = SupabaseErrorFormatter.userMessage(error));
+        setState(() {
+          _error = SupabaseErrorFormatter.userMessage(error);
+          _uncertain = true;
+          _active = true;
+        });
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -126,7 +135,11 @@ class _InviteLinkPanelState extends ConsumerState<InviteLinkPanel> {
         const SizedBox(height: 12),
         if (_busy) const LinearProgressIndicator(),
         if (_loaded) ...[
-          Text(_active ? '目前有有效的邀請連結' : '尚無有效邀請連結'),
+          Text(_uncertain
+              ? '無法確認連結狀態，請重設取得新連結或重新撤銷。'
+              : _active
+                  ? '目前有有效的邀請連結'
+                  : '尚無有效邀請連結'),
           const SizedBox(height: 12),
           SegmentedButton<TripPermission>(
               segments: const [
