@@ -1,1 +1,3 @@
 #include "Generated.xcconfig"
+INVITE_HOST = tanachu0409.github.io
+CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements

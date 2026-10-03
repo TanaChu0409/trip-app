@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:trip_planner_app/features/trips/data/trip_invite_link.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -18,6 +19,44 @@ class TripStore extends ChangeNotifier {
   TripStore._();
 
   static final TripStore instance = TripStore._();
+
+  Future<TripInviteLinkResult> getInviteLink(String tripId) =>
+      _withSessionGuard(() => _tripService
+          .inviteLinkRpc('get_trip_invite_link', {'p_trip_id': tripId}));
+
+  Future<TripInviteLinkResult> createInviteLink(
+          String tripId, TripPermission permission) =>
+      _withSessionGuardNoRetry(() => _tripService.inviteLinkRpc(
+          'create_trip_invite_link',
+          {'p_trip_id': tripId, 'p_permission': permission.name}));
+
+  Future<TripInviteLinkResult> revokeInviteLink(String tripId) =>
+      _withSessionGuard(() => _tripService
+          .inviteLinkRpc('revoke_trip_invite_link', {'p_trip_id': tripId}));
+
+  Future<TripInviteLinkResult> previewInviteLink(String token) =>
+      _withSessionGuard(() => _tripService
+          .inviteLinkRpc('preview_trip_invite_link', {'p_token': token}));
+
+  Future<TripInviteLinkResult> acceptInviteLink(String token) async {
+    final sessionToken = _sessionToken;
+    final result = await _withSessionGuardNoRetry(() => _tripService
+        .inviteLinkRpc('accept_trip_invite_link', {'p_token': token}));
+    if (_sessionToken != sessionToken) throw StateError('Session changed');
+    if (result.status == TripInviteStatus.success ||
+        result.status == TripInviteStatus.alreadyMember ||
+        result.status == TripInviteStatus.owner) {
+      await reloadTrips();
+    }
+    if (_sessionToken != sessionToken) throw StateError('Session changed');
+    if ((result.status == TripInviteStatus.success ||
+            result.status == TripInviteStatus.alreadyMember ||
+            result.status == TripInviteStatus.owner) &&
+        findById(result.tripId ?? '') == null) {
+      throw StateError('已接受邀請，但行程載入失敗，請重試。');
+    }
+    return result;
+  }
 
   final List<TripSummary> _trips = [];
   final Map<String, List<TripMember>> _membersByTripId = {};

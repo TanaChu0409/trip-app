@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:trip_planner_app/features/trip_detail/presentation/widgets/invite_link_panel.dart';
 import 'package:go_router/go_router.dart';
 import 'package:trip_planner_app/core/supabase/supabase_error_formatter.dart';
 import 'package:trip_planner_app/core/theme/app_theme.dart';
@@ -824,6 +825,8 @@ class _InviteMemberSheet extends StatefulWidget {
 }
 
 class _InviteMemberSheetState extends State<_InviteMemberSheet> {
+  bool _linkMode = false;
+  bool _hasOpenedLinks = false;
   final TextEditingController _emailController = TextEditingController();
   TripPermission _selectedPermission = TripPermission.editor;
   bool _isSubmitting = false;
@@ -845,72 +848,95 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
           color: Color(0xFFF6FAFF),
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        child: Column(
+        child: SingleChildScrollView(
+            child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('邀請成員', style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            const Text('輸入對方的 Email 地址邀請加入行程。'),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.info_outline_rounded,
-                    size: 16, color: Colors.orange.shade700),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    '提醒：對方須先登入本應用程式以建立帳號',
-                    style:
-                        TextStyle(fontSize: 13, color: Colors.orange.shade800),
+            const SizedBox(height: 12),
+            SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(value: false, label: Text('Email')),
+                  ButtonSegment(value: true, label: Text('分享連結'))
+                ],
+                selected: {
+                  _linkMode
+                },
+                onSelectionChanged: _isSubmitting
+                    ? null
+                    : (values) => setState(() {
+                          _linkMode = values.first;
+                          _hasOpenedLinks |= _linkMode;
+                        })),
+            if (_hasOpenedLinks)
+              Visibility(
+                  visible: _linkMode,
+                  maintainState: true,
+                  child: InviteLinkPanel(tripId: widget.tripId)),
+            if (!_linkMode) ...[
+              const SizedBox(height: 8),
+              const Text('輸入對方的 Email 地址邀請加入行程。'),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.info_outline_rounded,
+                      size: 16, color: Colors.orange.shade700),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '提醒：對方須先登入本應用程式以建立帳號',
+                      style: TextStyle(
+                          fontSize: 13, color: Colors.orange.shade800),
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              autocorrect: false,
-              decoration: const InputDecoration(
-                labelText: '對方的 Email',
-                hintText: '例如 someone@example.com',
-                prefixIcon: Icon(Icons.email_outlined),
+                ],
               ),
-              onSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 16),
-            Text('權限', style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(height: 8),
-            SegmentedButton<TripPermission>(
-              segments: const [
-                ButtonSegment(
-                  value: TripPermission.editor,
-                  label: Text('可編輯'),
-                  icon: Icon(Icons.edit_outlined),
+              const SizedBox(height: 18),
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                autocorrect: false,
+                decoration: const InputDecoration(
+                  labelText: '對方的 Email',
+                  hintText: '例如 someone@example.com',
+                  prefixIcon: Icon(Icons.email_outlined),
                 ),
-                ButtonSegment(
-                  value: TripPermission.viewer,
-                  label: Text('僅限查看'),
-                  icon: Icon(Icons.visibility_outlined),
-                ),
-              ],
-              selected: {_selectedPermission},
-              onSelectionChanged: (selection) {
-                if (selection.isNotEmpty) {
-                  setState(() => _selectedPermission = selection.first);
-                }
-              },
-            ),
-            const SizedBox(height: 20),
-            FilledButton(
-              onPressed: _isSubmitting ? null : _submit,
-              style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50)),
-              child: Text(_isSubmitting ? '邀請中...' : '傳送邀請'),
-            ),
+                onSubmitted: (_) => _submit(),
+              ),
+              const SizedBox(height: 16),
+              Text('權限', style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 8),
+              SegmentedButton<TripPermission>(
+                segments: const [
+                  ButtonSegment(
+                    value: TripPermission.editor,
+                    label: Text('可編輯'),
+                    icon: Icon(Icons.edit_outlined),
+                  ),
+                  ButtonSegment(
+                    value: TripPermission.viewer,
+                    label: Text('僅限查看'),
+                    icon: Icon(Icons.visibility_outlined),
+                  ),
+                ],
+                selected: {_selectedPermission},
+                onSelectionChanged: (selection) {
+                  if (selection.isNotEmpty) {
+                    setState(() => _selectedPermission = selection.first);
+                  }
+                },
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: _isSubmitting ? null : _submit,
+                style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50)),
+                child: Text(_isSubmitting ? '邀請中...' : '傳送邀請'),
+              ),
+            ],
           ],
-        ),
+        )),
       ),
     );
   }
