@@ -22,6 +22,10 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.trip_planner_app"
+        manifestPlaceholders["inviteHost"] = providers.gradleProperty("INVITE_HOST")
+            .getOrElse("tanachu0409.github.io")
+        manifestPlaceholders["invitePath"] = providers.gradleProperty("INVITE_PATH")
+            .getOrElse("/trip-app/")
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
