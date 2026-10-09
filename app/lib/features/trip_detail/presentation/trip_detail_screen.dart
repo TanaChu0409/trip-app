@@ -33,7 +33,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   static const double _tabBarHeaderHeight = 56;
 
   late TabController _tabController;
-  late final TripStore _tripStore;
+  late TripStore _tripStore;
   bool _hasSelectedInitialDay = false;
   bool _hideFloatingActionButton = false;
 
@@ -71,9 +71,17 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   @override
   void didUpdateWidget(covariant TripDetailScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final nextStore = widget.tripStore ?? TripStore.instance;
+    final storeChanged = !identical(_tripStore, nextStore);
     if (oldWidget.tripId == widget.tripId &&
-        oldWidget.loadArchivedTrip == widget.loadArchivedTrip) {
+        oldWidget.loadArchivedTrip == widget.loadArchivedTrip &&
+        !storeChanged) {
       return;
+    }
+    if (storeChanged) {
+      _tripStore.removeListener(_handleStoreChanged);
+      _tripStore = nextStore;
+      _tripStore.addListener(_handleStoreChanged);
     }
     _hasSelectedInitialDay = false;
     _currentTrip = _tripStore.findById(widget.tripId);

@@ -6,6 +6,7 @@ import 'package:trip_planner_app/features/trips/data/trip_store.dart';
 
 class FakeTripStore extends ChangeNotifier implements TripStore {
   TripSummary? trip;
+  bool get isObserved => hasListeners;
 
   void update(TripSummary value) {
     trip = value;
@@ -66,6 +67,44 @@ int selectedIndex(WidgetTester tester) =>
     tester.widget<TabBar>(find.byType(TabBar)).controller!.index;
 
 void main() {
+  for (final initiallyLoaded in [true, false]) {
+    testWidgets('rebinds replacement store (loaded: $initiallyLoaded)',
+        (tester) async {
+      final oldStore = FakeTripStore()..trip = makeTrip();
+      final replacement = FakeTripStore();
+      if (initiallyLoaded) {
+        replacement.trip = makeTrip().copyWith(title: 'Replacement');
+      }
+      await tester.pumpWidget(screen(oldStore));
+      await tester.pumpAndSettle();
+      final state = tester.state(find.byType(TripDetailScreen));
+      expect(oldStore.isObserved, isTrue);
+
+      await tester.pumpWidget(screen(replacement));
+      await tester.pumpAndSettle();
+      expect(tester.state(find.byType(TripDetailScreen)), same(state));
+      expect(oldStore.isObserved, isFalse);
+      expect(replacement.isObserved, isTrue);
+      if (initiallyLoaded) {
+        expect(find.text('Replacement'), findsOneWidget);
+        expect(selectedIndex(tester), 1);
+      } else {
+        expect(find.text('找不到旅程'), findsOneWidget);
+      }
+
+      oldStore.update(makeTrip().copyWith(title: 'Obsolete'));
+      replacement.update(makeTrip().copyWith(title: 'New update'));
+      await tester.pumpAndSettle();
+      expect(find.text('New update'), findsOneWidget);
+      expect(find.text('Obsolete'), findsNothing);
+      expect(selectedIndex(tester), 1);
+      await tester.pumpWidget(const SizedBox());
+      expect(replacement.isObserved, isFalse);
+      oldStore.dispose();
+      replacement.dispose();
+    });
+  }
+
   for (final role in TripRole.values) {
     testWidgets('loaded $role trip selects today', (tester) async {
       final store = FakeTripStore()..trip = makeTrip(role: role);
