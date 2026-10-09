@@ -218,8 +218,6 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                       tripColor: tripColor,
                       onInviteMember: () =>
                           _showInviteMemberSheet(context, trip),
-                      onOpenNavigation: () =>
-                          context.go('/trips/${trip.id}/navigation'),
                     ),
                   ],
                 ),
@@ -311,7 +309,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
           builder: (context) => AlertDialog(
             title: Text(isArchived ? '封存旅程？' : '還原旅程？'),
             content: Text(isArchived
-                ? '封存後，所有成員只能從封存頁查看此旅程，且無法編輯或使用導航。'
+                ? '封存後，所有成員只能從封存頁查看此旅程，且無法編輯。'
                 : '還原後，旅程會重新出現在一般列表並恢復提醒。'),
             actions: [
               TextButton(
@@ -661,13 +659,11 @@ class _TripSummaryCard extends StatelessWidget {
     required this.trip,
     required this.tripColor,
     required this.onInviteMember,
-    required this.onOpenNavigation,
   });
 
   final TripSummary trip;
   final Color tripColor;
   final VoidCallback onInviteMember;
-  final VoidCallback onOpenNavigation;
 
   @override
   Widget build(BuildContext context) {
@@ -709,7 +705,7 @@ class _TripSummaryCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               trip.isArchived
-                  ? '此旅程已封存，僅供瀏覽；編輯、邀請與導航提醒均已暫停。'
+                  ? '此旅程已封存，僅供瀏覽；編輯與邀請均已暫停。'
                   : switch (trip.role) {
                       TripRole.owner => 'Owner 模式，可直接新增、編輯、刪除與排序行程地點。',
                       TripRole.guest => trip.permission == TripPermission.editor
@@ -734,14 +730,6 @@ class _TripSummaryCard extends StatelessWidget {
                 _MiniStat(value: '${trip.stopCount}', label: '停靠點'),
               ],
             ),
-            if (!trip.isArchived) ...[
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: onOpenNavigation,
-                icon: const Icon(Icons.navigation_outlined),
-                label: const Text('開啟導航模式'),
-              ),
-            ],
           ],
         ),
       ),

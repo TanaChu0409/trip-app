@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:trip_planner_app/core/theme/app_theme.dart';
 import 'package:trip_planner_app/features/trip_detail/presentation/widgets/stop_photo_image.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
@@ -157,14 +156,6 @@ class StopCard extends StatelessWidget {
                         ),
                       ),
                     ],
-                    if (stop.mapUrl != null) ...[
-                      const SizedBox(height: 12),
-                      FilledButton.tonalIcon(
-                        onPressed: () => _openMap(stop.mapUrl!),
-                        icon: const Icon(Icons.map_outlined),
-                        label: const Text('開啟地圖'),
-                      ),
-                    ],
                     if (stop.parkingSpots.isNotEmpty) ...[
                       const SizedBox(height: 14),
                       const Text(
@@ -196,10 +187,6 @@ class StopCard extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              TextButton(
-                                onPressed: () => _openMap(parking.mapUrl),
-                                child: const Text('導航'),
-                              ),
                             ],
                           ),
                         ),
@@ -210,7 +197,7 @@ class StopCard extends StatelessWidget {
                       isArchived
                           ? '此旅程已封存，僅供瀏覽。'
                           : isReadOnly
-                              ? '唯讀模式仍可接收通知與使用導航模式。'
+                              ? '唯讀模式仍可接收通知。'
                               : '點擊可編輯，長按拖曳可調整順序。',
                     ),
                   ],
@@ -221,13 +208,6 @@ class StopCard extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  Future<void> _openMap(String url) async {
-    final uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      throw Exception('Could not launch $url');
-    }
   }
 
   void _showPhotoPreview(
