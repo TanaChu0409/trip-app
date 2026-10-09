@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:trip_planner_app/features/trip_detail/presentation/initial_day_tab_index.dart';
 import 'package:trip_planner_app/features/trip_detail/presentation/widgets/invite_link_panel.dart';
 import 'package:go_router/go_router.dart';
 import 'package:trip_planner_app/core/supabase/supabase_error_formatter.dart';
@@ -14,10 +15,14 @@ class TripDetailScreen extends StatefulWidget {
     super.key,
     required this.tripId,
     this.loadArchivedTrip = false,
+    this.tripStore,
   });
 
   final String tripId;
   final bool loadArchivedTrip;
+
+  /// Optional store override for isolated widget tests.
+  final TripStore? tripStore;
 
   @override
   State<TripDetailScreen> createState() => _TripDetailScreenState();
@@ -28,7 +33,8 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   static const double _tabBarHeaderHeight = 56;
 
   late TabController _tabController;
-  final TripStore _tripStore = TripStore.instance;
+  late TripStore _tripStore;
+  bool _hasSelectedInitialDay = false;
   bool _hideFloatingActionButton = false;
 
   // Cached trip reference – rebuilt only when this specific trip changes.
@@ -39,15 +45,49 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   @override
   void initState() {
     super.initState();
+    _tripStore = widget.tripStore ?? TripStore.instance;
     _currentTrip = _tripStore.findById(widget.tripId);
     _isStoreLoading = _isRelevantStoreLoading;
     _storeLoadError = _relevantLoadError;
     final initialDayCount = _currentTrip == null || _currentTrip!.days.isEmpty
         ? 1
         : _currentTrip!.days.length;
-    _tabController = TabController(length: initialDayCount, vsync: this);
+    _hasSelectedInitialDay = _currentTrip?.days.isNotEmpty ?? false;
+    _tabController = TabController(
+      length: initialDayCount,
+      vsync: this,
+      initialIndex:
+          initialDayTabIndex(_currentTrip?.days ?? [], DateTime.now()),
+    );
     _tabController.addListener(_handleTabChanged);
     _tripStore.addListener(_handleStoreChanged);
+    if (widget.loadArchivedTrip) {
+      _tripStore.ensureArchivedTripsLoaded();
+    } else {
+      _tripStore.ensureLoaded();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant TripDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextStore = widget.tripStore ?? TripStore.instance;
+    final storeChanged = !identical(_tripStore, nextStore);
+    if (oldWidget.tripId == widget.tripId &&
+        oldWidget.loadArchivedTrip == widget.loadArchivedTrip &&
+        !storeChanged) {
+      return;
+    }
+    if (storeChanged) {
+      _tripStore.removeListener(_handleStoreChanged);
+      _tripStore = nextStore;
+      _tripStore.addListener(_handleStoreChanged);
+    }
+    _hasSelectedInitialDay = false;
+    _currentTrip = _tripStore.findById(widget.tripId);
+    _isStoreLoading = _isRelevantStoreLoading;
+    _storeLoadError = _relevantLoadError;
+    _syncTabController(_currentTrip?.days ?? []);
     if (widget.loadArchivedTrip) {
       _tripStore.ensureArchivedTripsLoaded();
     } else {
@@ -81,7 +121,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
       _isStoreLoading = newLoading;
       _storeLoadError = newError;
       if (newTrip != null) {
-        _syncTabController(newTrip.days.isEmpty ? 1 : newTrip.days.length);
+        _syncTabController(newTrip.days);
       }
     });
   }
@@ -94,13 +134,19 @@ class _TripDetailScreenState extends State<TripDetailScreen>
       ? _tripStore.archivedLoadError
       : _tripStore.loadError;
 
-  void _syncTabController(int nextLength) {
+  void _syncTabController(List<TripDay> days) {
+    final nextLength = days.isEmpty ? 1 : days.length;
+    final shouldSelectInitialDay = !_hasSelectedInitialDay && days.isNotEmpty;
+    final nextIndex = shouldSelectInitialDay
+        ? initialDayTabIndex(days, DateTime.now())
+        : _tabController.index.clamp(0, nextLength - 1);
+    if (shouldSelectInitialDay) _hasSelectedInitialDay = true;
     if (_tabController.length == nextLength) {
+      if (shouldSelectInitialDay) _tabController.index = nextIndex;
       return;
     }
 
     final previousController = _tabController;
-    final nextIndex = previousController.index.clamp(0, nextLength - 1);
     previousController.removeListener(_handleTabChanged);
     _tabController = TabController(
       length: nextLength,
