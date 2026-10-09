@@ -207,7 +207,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
           builder: (context) => AlertDialog(
             title: Text(isArchived ? '封存旅程？' : '還原旅程？'),
             content: Text(isArchived
-                ? '封存後，所有成員只能從封存頁查看「${trip.title}」，且無法編輯或使用導航。'
+                ? '封存後，所有成員只能從封存頁查看「${trip.title}」，且無法編輯。'
                 : '還原後，「${trip.title}」會重新出現在一般旅程列表並恢復提醒。'),
             actions: [
               TextButton(

@@ -2,7 +2,6 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:trip_planner_app/features/auth/presentation/auth_screen.dart';
 import 'package:trip_planner_app/features/auth/data/auth_provider.dart';
-import 'package:trip_planner_app/features/notifications/presentation/navigation_mode_screen.dart';
 import 'package:trip_planner_app/features/trip_detail/presentation/member_management_screen.dart';
 import 'package:trip_planner_app/features/trip_detail/presentation/stop_form_screen.dart';
 import 'package:trip_planner_app/features/trip_detail/presentation/trip_detail_screen.dart';
@@ -80,13 +79,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     dayId: dayId,
                     stopId: stopId,
                   );
-                },
-              ),
-              GoRoute(
-                path: 'navigation',
-                builder: (context, state) {
-                  final tripId = state.pathParameters['tripId']!;
-                  return NavigationModeScreen(tripId: tripId);
                 },
               ),
               GoRoute(
