@@ -27,6 +27,7 @@ void main() {
           id: 'day-1',
           label: '第一天',
           dateLabel: '5/1',
+          date: DateTime(2026, 5, 1),
           subtitle: '出發',
           stops: [
             StopItem(
@@ -73,6 +74,7 @@ void main() {
     expect(snapshot, isNotNull);
     expect(snapshot!.savedAt, DateTime.utc(2026, 6, 1, 8));
     expect(snapshot.trips.single.title, '台南兩天一夜');
+    expect(snapshot.trips.single.days.single.date, DateTime(2026, 5, 1));
     expect(snapshot.trips.single.days.single.stops.single.timeLabel, '08:05');
     expect(snapshot.trips.single.customStopColors, ['#123456']);
     expect(

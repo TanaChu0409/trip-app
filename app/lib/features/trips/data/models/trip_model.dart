@@ -274,6 +274,7 @@ class TripDay {
     required this.dateLabel,
     required this.subtitle,
     required this.stops,
+    this.date,
   });
 
   final String id;
@@ -282,12 +283,16 @@ class TripDay {
   final String subtitle;
   final List<StopItem> stops;
 
+  /// Calendar date of this itinerary day; absent in legacy snapshots.
+  final DateTime? date;
+
   TripDay copyWith({
     String? id,
     String? label,
     String? dateLabel,
     String? subtitle,
     List<StopItem>? stops,
+    DateTime? date,
   }) {
     return TripDay(
       id: id ?? this.id,
@@ -295,6 +300,7 @@ class TripDay {
       dateLabel: dateLabel ?? this.dateLabel,
       subtitle: subtitle ?? this.subtitle,
       stops: stops ?? this.stops,
+      date: date ?? this.date,
     );
   }
 
@@ -303,6 +309,7 @@ class TripDay {
       'id': id,
       'label': label,
       'date_label': dateLabel,
+      'date': date?.toIso8601String(),
       'subtitle': subtitle,
       'stops': [
         for (final stop in stops) stop.toCacheJson(),
@@ -315,6 +322,7 @@ class TripDay {
       id: json['id'] as String? ?? '',
       label: json['label'] as String? ?? '',
       dateLabel: json['date_label'] as String? ?? '',
+      date: DateTime.tryParse(json['date'] as String? ?? ''),
       subtitle: json['subtitle'] as String? ?? '',
       stops: [
         for (final stopJson in _jsonMapList(json['stops']))

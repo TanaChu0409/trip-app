@@ -338,6 +338,7 @@ class TripService {
               id: row['id'] as String,
               label: row['label'] as String? ?? '',
               dateLabel: '${date.month}/${date.day}',
+              date: date,
               subtitle: row['subtitle'] as String? ?? '',
               stops: stopsByDayId[row['id'] as String] ?? const [],
             ),
