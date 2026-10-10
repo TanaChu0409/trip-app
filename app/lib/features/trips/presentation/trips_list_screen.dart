@@ -346,10 +346,18 @@ class _CreateTripSheet extends StatefulWidget {
 class _CreateTripSheetState extends State<_CreateTripSheet> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
-  DateTime _startDate = DateTime(2026, 5, 1);
-  DateTime _endDate = DateTime(2026, 5, 3);
+  late DateTime _startDate;
+  late DateTime _endDate;
   String? _selectedColor = TripColors.defaultHex;
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _startDate = DateTime(now.year, now.month, now.day);
+    _endDate = DateTime(now.year, now.month, now.day + 5);
+  }
 
   @override
   void dispose() {
