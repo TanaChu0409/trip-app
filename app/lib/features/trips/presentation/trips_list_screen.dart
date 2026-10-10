@@ -433,11 +433,13 @@ class _CreateTripSheetState extends State<_CreateTripSheet> {
 
   Future<void> _pickDate({required bool isStartDate}) async {
     final initialDate = isStartDate ? _startDate : _endDate;
+    final firstDate = DateTime(2025, 1, 1);
+    final lastDate = DateTime(2030, 12, 31);
     final picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
-      firstDate: DateTime(2025, 1, 1),
-      lastDate: DateTime(2030, 12, 31),
+      firstDate: _startDate.isBefore(firstDate) ? _startDate : firstDate,
+      lastDate: _endDate.isAfter(lastDate) ? _endDate : lastDate,
     );
 
     if (picked == null) {
