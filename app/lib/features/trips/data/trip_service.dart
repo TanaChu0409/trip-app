@@ -438,8 +438,8 @@ class TripService {
     required DateTime endDate,
   }) {
     final rows = <Map<String, dynamic>>[];
-    var current = DateTime(startDate.year, startDate.month, startDate.day);
-    final last = DateTime(endDate.year, endDate.month, endDate.day);
+    var current = DateTime.utc(startDate.year, startDate.month, startDate.day);
+    final last = DateTime.utc(endDate.year, endDate.month, endDate.day);
     var index = 0;
 
     while (!current.isAfter(last)) {
@@ -451,7 +451,7 @@ class TripService {
         'subtitle': index == 1 ? '從這一天開始安排行程。' : '這一天的詳細行程尚未建立。',
         'sort_order': index - 1,
       });
-      current = current.add(const Duration(days: 1));
+      current = DateTime.utc(current.year, current.month, current.day + 1);
     }
 
     return rows;
