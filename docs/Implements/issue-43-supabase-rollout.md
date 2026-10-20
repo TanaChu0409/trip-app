@@ -6,7 +6,9 @@ fresh local database only and never connects to the production project.
 ## Preconditions
 
 1. Merge the issue branch only after `Supabase database` is green.
-2. Confirm the production schema matches migrations `001` through `025`.
+2. Read the current remote migration history and compare the production schema
+   with every migration claimed as applied, including the timestamped
+   `20261003154139_trip_invite_links.sql` when present.
    Compare tables, columns, constraints, policies, triggers, functions, views,
    Storage policies, and Realtime publication membership. Do not infer this
    from application behaviour alone.
@@ -15,30 +17,39 @@ fresh local database only and never connects to the production project.
 4. Link the CLI to the intended project and verify its project reference before
    running any write command.
 
-The remote migration history is currently empty. Do **not** run a normal
-`supabase db push` until the history has been repaired, because that would try
-to replay migrations `001` through `025` against an existing schema.
+The issue #43 investigation found an empty remote migration history at that
+time; this is not evidence of its current state. Read `supabase migration list
+--linked` first. If history is missing, do **not** run a normal `supabase db push`
+until it has been repaired: it could replay old migrations against an existing
+schema. Do not reset the remote database.
 
 ## Repair migration history
 
-After the schema comparison is approved, mark only the already-present
-migrations as applied:
+Only if schema comparison confirms `001` through `025` are already present
+and their history is missing, mark those versions as applied:
 
 ```shell
 supabase migration repair --linked --status applied 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025
 ```
 
-Read the remote history back and stop if any version is missing or if migration
-`026` is already marked as applied unexpectedly:
+Apply the same evidence requirement to `026` and `20261003154139`: repair them
+only when their complete effects already exist. Never mark a missing schema
+change as applied. Never rerun `026` on top of the invite-link migration:
+`026` grants the legacy `join_trip_by_code` RPC, while the later migration
+deliberately revokes it and removes self-join membership inserts.
+
+Read the remote history back and stop if it disagrees with the inspected schema:
 
 ```shell
 supabase migration list --linked
 supabase db push --linked --dry-run
 ```
 
-The dry run must list only
-`026_explicit_data_api_grants.sql`. With an explicit production
-approval, apply it through the normal migration flow:
+For a project genuinely at `025`, the dry run must list `026` followed by
+`20261003154139_trip_invite_links.sql`. For a project at `026`, only the latter
+is expected; for an up-to-date project, neither should be pending. Review any
+future migrations separately. With an explicit production approval, apply
+only the verified pending migrations through the normal migration flow:
 
 ```shell
 supabase db push --linked
@@ -56,13 +67,17 @@ Verify all of the following before closing issue #43:
   `supabase/tests/database/001_acl.test.sql`.
 - Function `EXECUTE` privileges match the same allowlist.
 - `profiles.email` cannot be selected or returned by an authenticated client.
-- `join_code_attempts` and `invite_member_attempts` reject direct client access.
+- `join_code_attempts`, `invite_member_attempts`, and `trip_invite_links` reject
+  direct client access.
+- Legacy `join_trip_by_code` execution and direct membership self-inserts are
+  denied; authenticated invite-link RPCs remain available.
 - The Data API exposes only the intended `public` schema and automatic grants
   remain disabled.
 - Supabase Security Advisor has no client-executable internal
   `SECURITY DEFINER` functions from this application.
 
-Run authenticated smoke tests for: creating a trip, joining by share code,
+Run authenticated smoke tests for: creating a trip, creating/previewing/accepting
+and revoking invite links (including rejecting the legacy share-code RPC),
 inviting editor/viewer members, changing member permissions, creating and
 editing days/stops/parking, uploading and deleting stop photos, changing trip
 and stop colours, archiving/restoring a trip, and updating a profile. Include
