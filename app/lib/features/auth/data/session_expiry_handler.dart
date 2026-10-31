@@ -1,3 +1,4 @@
+import 'package:trip_planner_app/core/diagnostics/diagnostic_log.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:trip_planner_app/core/supabase/supabase_session_guard.dart';
@@ -18,7 +19,8 @@ class SessionExpiryHandler {
 
     try {
       await Supabase.instance.client.auth.signOut();
-    } catch (signOutError) {
+    } catch (signOutError, stackTrace) {
+      DiagnosticLog.instance.error('登入失效後登出', signOutError, stackTrace);
       debugPrint('Failed to sign out after expired session: $signOutError');
     }
 

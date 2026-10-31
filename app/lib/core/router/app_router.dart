@@ -1,3 +1,5 @@
+import 'package:trip_planner_app/core/diagnostics/diagnostic_observer.dart';
+import 'package:trip_planner_app/core/diagnostics/diagnostic_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/foundation.dart';
 import 'package:trip_planner_app/core/router/invite_link_controller.dart';
@@ -17,12 +19,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
   final router = GoRouter(
     initialLocation: '/trips',
+    observers: [DiagnosticObserver()],
     refreshListenable: Listenable.merge([authStateListenable, invites]),
     redirect: (context, state) {
+      if (state.matchedLocation == '/diagnostics') return null;
       return invites.redirect(state.matchedLocation,
           authenticated: authStateListenable.isAuthenticated);
     },
     routes: [
+      GoRoute(
+          path: '/diagnostics',
+          builder: (context, state) => const DiagnosticScreen()),
       GoRoute(
           path: '/invite/:token',
           builder: (context, state) =>

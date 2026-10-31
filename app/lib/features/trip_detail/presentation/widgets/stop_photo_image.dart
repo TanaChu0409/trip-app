@@ -1,3 +1,4 @@
+import 'package:trip_planner_app/core/diagnostics/diagnostic_log.dart';
 import 'package:flutter/material.dart';
 import 'package:trip_planner_app/features/auth/data/session_expiry_handler.dart';
 import 'package:trip_planner_app/features/trip_detail/data/stop_photo_service.dart';
@@ -44,7 +45,8 @@ class _StopPhotoImageState extends State<StopPhotoImage> {
   Future<StopPhoto> _resolvePhoto() async {
     try {
       return await _photoService.ensureActiveUrl(widget.photo);
-    } catch (error) {
+    } catch (error, stackTrace) {
+      DiagnosticLog.instance.error('照片連結更新', error, stackTrace);
       await SessionExpiryHandler.signOutIfSessionExpired(error);
       rethrow;
     }

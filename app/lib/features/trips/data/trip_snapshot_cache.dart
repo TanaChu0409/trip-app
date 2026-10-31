@@ -1,3 +1,4 @@
+import 'package:trip_planner_app/core/diagnostics/diagnostic_log.dart';
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -86,7 +87,8 @@ class TripSnapshotCache {
               ),
         ],
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      DiagnosticLog.instance.error('背景處理', error, stackTrace);
       return null;
     }
   }

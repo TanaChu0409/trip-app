@@ -1,3 +1,4 @@
+import 'package:trip_planner_app/core/diagnostics/diagnostic_log.dart';
 import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -28,54 +29,63 @@ class StopPhotoService {
     required int sortOrder,
     required Uint8List bytes,
   }) async {
-    final userId = _requireUserId();
-    final upload = await _uploadPreparer.prepare(bytes);
+    return DiagnosticLog.instance.trace('壓縮與上傳照片', () async {
+      final userId = _requireUserId();
+      final upload = await _uploadPreparer.prepare(bytes);
 
-    final filename = '${const Uuid().v4()}.${upload.fileExtension}';
-    final storagePath = '$userId/$tripId/$stopId/$filename';
+      final filename = '${const Uuid().v4()}.${upload.fileExtension}';
+      final storagePath = '$userId/$tripId/$stopId/$filename';
 
-    await _client.storage.from(_bucket).uploadBinary(
-          storagePath,
-          upload.bytes,
-          fileOptions: FileOptions(
-            contentType: upload.contentType,
-            upsert: false,
-          ),
-        );
+      await _client.storage.from(_bucket).uploadBinary(
+            storagePath,
+            upload.bytes,
+            fileOptions: FileOptions(
+              contentType: upload.contentType,
+              upsert: false,
+            ),
+          );
 
-    try {
-      final row = await _client
-          .from('stop_photos')
-          .insert({
-            'stop_id': stopId,
-            'storage_path': storagePath,
-            'sort_order': sortOrder,
-          })
-          .select()
-          .single();
-
-      return buildPhotoFromRow(Map<String, dynamic>.from(row));
-    } catch (_) {
       try {
-        // Ignore cleanup failures because the original insert error is the
-        // actionable failure for the caller.
-        await _client.storage.from(_bucket).remove([storagePath]);
-      } catch (_) {}
-      rethrow;
-    }
+        final row = await _client
+            .from('stop_photos')
+            .insert({
+              'stop_id': stopId,
+              'storage_path': storagePath,
+              'sort_order': sortOrder,
+            })
+            .select()
+            .single();
+
+        return buildPhotoFromRow(Map<String, dynamic>.from(row));
+      } catch (error, stackTrace) {
+        DiagnosticLog.instance.error('照片處理或清理', error, stackTrace);
+        try {
+          // Ignore cleanup failures because the original insert error is the
+          // actionable failure for the caller.
+          await _client.storage.from(_bucket).remove([storagePath]);
+        } catch (error, stackTrace) {
+          DiagnosticLog.instance.error('照片處理或清理', error, stackTrace);
+        }
+        rethrow;
+      }
+    });
   }
 
   /// Delete [photo] from both storage and the database.
   Future<void> deletePhoto(StopPhoto photo) async {
-    final photoId = photo.id;
-    if (photoId == null) return;
+    return DiagnosticLog.instance.trace('刪除照片', () async {
+      final photoId = photo.id;
+      if (photoId == null) return;
 
-    // Best-effort storage delete — continue even if the object is already gone.
-    try {
-      await _client.storage.from(_bucket).remove([photo.storagePath]);
-    } catch (_) {}
+      // Best-effort storage delete — continue even if the object is already gone.
+      try {
+        await _client.storage.from(_bucket).remove([photo.storagePath]);
+      } catch (error, stackTrace) {
+        DiagnosticLog.instance.error('照片處理或清理', error, stackTrace);
+      }
 
-    await _client.from('stop_photos').delete().eq('id', photoId);
+      await _client.from('stop_photos').delete().eq('id', photoId);
+    });
   }
 
   /// Fetch all photos for the given [stopIds], ordered by `sort_order`.
@@ -130,16 +140,18 @@ class StopPhotoService {
   }
 
   Future<StopPhoto> ensureActiveUrl(StopPhoto photo) async {
-    if (photo.storagePath.isEmpty ||
-        !photo.needsUrlRefresh(tolerance: signedUrlRefreshTolerance)) {
-      return photo;
-    }
+    return DiagnosticLog.instance.trace('更新照片連結', () async {
+      if (photo.storagePath.isEmpty ||
+          !photo.needsUrlRefresh(tolerance: signedUrlRefreshTolerance)) {
+        return photo;
+      }
 
-    final signedUrl = await _createSignedUrl(photo.storagePath);
-    return photo.copyWith(
-      url: signedUrl,
-      signedUrlExpiresAt: _nextSignedUrlExpiry(),
-    );
+      final signedUrl = await _createSignedUrl(photo.storagePath);
+      return photo.copyWith(
+        url: signedUrl,
+        signedUrlExpiresAt: _nextSignedUrlExpiry(),
+      );
+    });
   }
 
   String _requireUserId() {

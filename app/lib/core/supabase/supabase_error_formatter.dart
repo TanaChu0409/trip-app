@@ -5,89 +5,73 @@ class SupabaseErrorFormatter {
   const SupabaseErrorFormatter._();
 
   static String userMessage(Object error) {
-    if (error is StateError) {
-      final message = error.message.toString();
-      if (message.contains('Missing required environment variable')) {
-        return '缺少 Supabase 設定。請用 --dart-define 或 --dart-define-from-file 提供 SUPABASE_URL 與 SUPABASE_ANON_KEY。';
-      }
-      if (_containsCjk(message)) {
-        return message;
-      }
+    final normalized = error.toString().toLowerCase();
+    if (error is StateError &&
+        error.message
+            .toString()
+            .contains('Missing required environment variable')) {
+      return '服務暫時無法使用，請稍後再試。';
     }
-
-    if (error is ArgumentError) {
-      final message = error.message?.toString() ?? '';
-      if (message.contains('不支援的圖片格式') ||
-          message.contains('iPhone 圖片') ||
-          _containsCjk(message)) {
-        return message;
-      }
-    }
-
     if (error is StopPhotoUploadException) {
-      return error.userMessage;
+      return switch (error.code) {
+        StopPhotoUploadErrorCode.unsupportedImageFormat =>
+          '不支援的圖片格式，請改用 JPEG、PNG 或 WebP。',
+        StopPhotoUploadErrorCode.invalidImageData => '這張圖片檔案已損毀或無法讀取，請改選其他照片。',
+        StopPhotoUploadErrorCode.iphoneImageConversionFailed =>
+          '目前無法處理這張 iPhone 圖片，請先轉成 JPEG 或 PNG 後再試。',
+      };
     }
-
+    if (error is ArgumentError &&
+        error.message == '不支援的圖片格式，請改用 JPEG、PNG 或 WebP。') {
+      return '不支援的圖片格式，請改用 JPEG、PNG 或 WebP。';
+    }
+    if (normalized.contains('failed host lookup') ||
+        normalized.contains('socketexception') ||
+        normalized.contains('xmlhttprequest') ||
+        normalized.contains('failed to fetch') ||
+        normalized.contains('network') ||
+        normalized.contains('timed out') ||
+        normalized.contains('clientexception')) {
+      return '無法連線，請檢查網路連線後再試。';
+    }
+    if (normalized.contains('jwt') ||
+        normalized.contains('refresh token') ||
+        normalized.contains('session expired') ||
+        normalized.contains('登入狀態已失效') ||
+        (error is PostgrestException && error.code == 'PGRST301') ||
+        (error is StorageException && error.statusCode == '401')) {
+      return '登入狀態已失效，請重新登入後再試。';
+    }
     if (error is AuthException) {
-      return error.message;
+      return '登入失敗，請稍後再試。';
     }
-
     if (error is StorageException) {
-      final message = error.message.trim();
-      final normalized = message.toLowerCase();
-
-      if (normalized.contains('object not found') ||
-          normalized.contains('bucket not found')) {
-        return '找不到照片儲存空間。請確認已執行 stop photos 相關的 Supabase migration。';
+      final message = error.message.toLowerCase();
+      if (message.contains('object not found')) {
+        return '找不到這張照片，請重新整理後再試。';
       }
-
-      if (normalized.contains('signed') && normalized.contains('url')) {
-        return '照片已上傳，但無法取得顯示連結，請稍後重新整理再試。';
+      if (message.contains('bucket not found')) {
+        return '照片服務暫時無法使用，請稍後再試。';
       }
-
-      if (normalized.contains('row-level security') ||
-          normalized.contains('unauthorized') ||
-          normalized.contains('permission')) {
-        return 'Supabase 儲存空間權限擋下這次照片操作。請確認 stop-photos bucket 與 storage policy 已正確部署。';
+      if (message.contains('signed') && message.contains('url')) {
+        return '暫時無法顯示照片，請稍後重新整理再試。';
       }
-
-      if (message.isNotEmpty) {
-        return '照片上傳失敗：$message';
+      if (error.statusCode == '403' ||
+          message.contains('row-level security') ||
+          message.contains('unauthorized') ||
+          message.contains('permission')) {
+        return '目前無法存取照片，請確認你有編輯此旅程的權限，或稍後再試。';
       }
+      return '照片操作失敗，請稍後再試。';
     }
-
     if (error is PostgrestException) {
-      final message = error.message.trim();
-      final normalized = message.toLowerCase();
-
       if (error.code == '42501' || normalized.contains('row-level security')) {
-        return 'Supabase 權限設定擋下這次操作。請確認已執行所有 migration，尤其是 child tables 與 shared_access 的 RLS policy。';
+        return '目前無法完成操作，請確認你有操作此旅程的權限，或稍後再試。';
       }
-
       if (error.code == '23503') {
-        return '關聯資料不存在或尚未同步完成，請重新整理後再試一次。';
-      }
-
-      if (error.code == 'PGRST301' || normalized.contains('jwt')) {
-        return '登入狀態已失效，請重新登入後再試。';
-      }
-
-      if (message.isNotEmpty) {
-        return 'Supabase 回傳錯誤：$message';
+        return '相關資料可能已變更，請重新整理後再試。';
       }
     }
-
-    final fallback = error.toString().toLowerCase();
-    if (fallback.contains('failed host lookup') ||
-        fallback.contains('socketexception') ||
-        fallback.contains('xmlhttprequest') ||
-        fallback.contains('failed to fetch') ||
-        fallback.contains('network') ||
-        fallback.contains('timed out') ||
-        fallback.contains('clientexception')) {
-      return '無法連線到 Supabase。請確認網路、SUPABASE_URL 是否正確，以及 Supabase 專案是否可存取。';
-    }
-
     return '操作失敗，請稍後再試。';
   }
 
@@ -105,16 +89,11 @@ class SupabaseErrorFormatter {
       return '[storage:$statusCode:$reason] ${error.message}'.trim();
     }
     if (error is PostgrestException) {
-      final code = error.code == null || error.code!.isEmpty
-          ? 'unknown'
-          : error.code!;
+      final code =
+          error.code == null || error.code!.isEmpty ? 'unknown' : error.code!;
       return '[$code] ${error.message}'.trim();
     }
     return error.toString();
-  }
-
-  static bool _containsCjk(String value) {
-    return RegExp(r'[\u4E00-\u9FFF]').hasMatch(value);
   }
 
   static String _classifyStorageFailure(String message) {

@@ -1,3 +1,4 @@
+import 'package:trip_planner_app/core/diagnostics/diagnostic_log.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -24,8 +25,10 @@ final authStateChangesProvider = StreamProvider<bool>((ref) {
 
 final authStateListenableProvider = Provider<AuthStateListenable>((ref) {
   final authService = ref.watch(authServiceProvider);
-  final stream = authService.authStateChanges.map((authState) => authState.session != null);
-  final listenable = AuthStateListenable(stream, authService.currentSession != null);
+  final stream = authService.authStateChanges
+      .map((authState) => authState.session != null);
+  final listenable =
+      AuthStateListenable(stream, authService.currentSession != null);
 
   ref.onDispose(listenable.dispose);
   return listenable;
@@ -33,12 +36,16 @@ final authStateListenableProvider = Provider<AuthStateListenable>((ref) {
 
 class AuthStateListenable extends ChangeNotifier {
   AuthStateListenable(Stream<bool> authStateStream, bool initialValue)
-    : _isAuthenticated = initialValue {
+      : _isAuthenticated = initialValue {
     _subscription = authStateStream.listen((isAuthenticated) {
       if (_isAuthenticated == isAuthenticated) {
         return;
       }
 
+      if (isAuthenticated) {
+        DiagnosticLog.instance.event(DiagnosticKind.operation, '登入完成',
+            outcome: DiagnosticOutcome.success);
+      }
       final wasAuthenticated = _isAuthenticated;
       _isAuthenticated = isAuthenticated;
 
@@ -50,8 +57,12 @@ class AuthStateListenable extends ChangeNotifier {
       // with the router redirecting to the auth screen since the trip data is
       // no longer needed once the user is unauthenticated.
       if (wasAuthenticated && !isAuthenticated) {
+        DiagnosticLog.instance.signedOut();
         unawaited(
-          TripStore.instance.clearForSignOut().catchError((Object error, StackTrace stackTrace) {
+          TripStore.instance
+              .clearForSignOut()
+              .catchError((Object error, StackTrace stackTrace) {
+            DiagnosticLog.instance.error('登出資料清理', error, stackTrace);
             debugPrint('Failed to clear trip data during sign-out: $error');
           }),
         );

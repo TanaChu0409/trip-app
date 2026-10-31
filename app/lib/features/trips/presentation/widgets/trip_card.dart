@@ -73,7 +73,7 @@ class TripCard extends StatelessWidget {
                               TripRole.guest =>
                                 trip.permission == TripPermission.editor
                                     ? '可編輯'
-                                    : '唯讀',
+                                    : '僅限查看',
                             },
                     ),
                   ),
@@ -118,18 +118,18 @@ class TripCard extends StatelessWidget {
                     textColor: tripColorStrong,
                   ),
                   _MetaPill(
-                    label: '${trip.stopCount} 個停靠點',
+                    label: '${trip.stopCount} 個地點',
                     backgroundColor: tripColorSoft,
                     textColor: tripColorStrong,
                   ),
                   _MetaPill(
                     label: switch (trip.role) {
-                      TripRole.owner => trip.isArchived ? '封存閱讀' : '我的旅程',
+                      TripRole.owner => trip.isArchived ? '封存旅程' : '我的旅程',
                       TripRole.guest => trip.permission == TripPermission.editor
                           ? trip.isArchived
-                              ? '封存閱讀'
+                              ? '封存旅程'
                               : '協作中'
-                          : '唯讀分享',
+                          : '僅限查看分享',
                     },
                     backgroundColor: tripColorSoft,
                     textColor: tripColorStrong,

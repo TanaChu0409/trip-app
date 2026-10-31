@@ -1,3 +1,4 @@
+import 'package:trip_planner_app/core/diagnostics/diagnostic_log.dart';
 import 'dart:async';
 import 'package:trip_planner_app/features/trips/data/trip_invite_link.dart';
 
@@ -192,34 +193,36 @@ class TripStore extends ChangeNotifier {
     required String dayId,
     required StopItem stop,
   }) async {
-    final location = _findEditableDayLocation(tripId, dayId);
-    if (location == null) {
-      throw StateError('Trip or day not found, or trip is read-only.');
-    }
+    return DiagnosticLog.instance.trace('新增地點', () async {
+      final location = _findEditableDayLocation(tripId, dayId);
+      if (location == null) {
+        throw StateError('Trip or day not found, or trip is read-only.');
+      }
 
-    final draft =
-        _normalizeStopDraft(stop, sortOrder: location.day.stops.length);
-    final savedStop = await _saveStop(location.day.id, draft);
-    final updatedStops = _normalizeStops([...location.day.stops, savedStop]);
-    var updatedTrip = _replaceDayAt(
-      location.trip,
-      location.dayIndex,
-      location.day.copyWith(stops: updatedStops),
-    );
-    updatedTrip = _withSavedCustomStopColor(updatedTrip, savedStop.color);
+      final draft =
+          _normalizeStopDraft(stop, sortOrder: location.day.stops.length);
+      final savedStop = await _saveStop(location.day.id, draft);
+      final updatedStops = _normalizeStops([...location.day.stops, savedStop]);
+      var updatedTrip = _replaceDayAt(
+        location.trip,
+        location.dayIndex,
+        location.day.copyWith(stops: updatedStops),
+      );
+      updatedTrip = _withSavedCustomStopColor(updatedTrip, savedStop.color);
 
-    updatedTrip = _commitTripUpdate(updatedTrip) ?? updatedTrip;
-    await _withSessionGuard(
-      () => _stopService.reorderStops(
-        dayId: location.day.id,
-        stops: updatedStops,
-      ),
-    );
-    await _refreshTripReminders(updatedTrip);
-    _persistSnapshotInBackground();
-    notifyListeners();
-    return updatedStops.firstWhere((item) => item.id == savedStop.id,
-        orElse: () => savedStop);
+      updatedTrip = _commitTripUpdate(updatedTrip) ?? updatedTrip;
+      await _withSessionGuard(
+        () => _stopService.reorderStops(
+          dayId: location.day.id,
+          stops: updatedStops,
+        ),
+      );
+      await _refreshTripReminders(updatedTrip);
+      _persistSnapshotInBackground();
+      notifyListeners();
+      return updatedStops.firstWhere((item) => item.id == savedStop.id,
+          orElse: () => savedStop);
+    });
   }
 
   Future<StopItem> updateStop({
@@ -227,53 +230,55 @@ class TripStore extends ChangeNotifier {
     required String dayId,
     required StopItem stop,
   }) async {
-    final location = _findEditableDayLocation(tripId, dayId);
-    if (location == null) {
-      throw StateError('Trip or day not found, or trip is read-only.');
-    }
+    return DiagnosticLog.instance.trace('更新地點', () async {
+      final location = _findEditableDayLocation(tripId, dayId);
+      if (location == null) {
+        throw StateError('Trip or day not found, or trip is read-only.');
+      }
 
-    final stopIndex =
-        location.day.stops.indexWhere((item) => item.id == stop.id);
-    if (stopIndex == -1) {
-      throw StateError('Stop not found.');
-    }
+      final stopIndex =
+          location.day.stops.indexWhere((item) => item.id == stop.id);
+      if (stopIndex == -1) {
+        throw StateError('Stop not found.');
+      }
 
-    final existingStop = location.day.stops[stopIndex];
-    final draft = _normalizeStopDraft(
-      stop.copyWith(id: existingStop.id),
-      sortOrder: existingStop.sortOrder,
-    );
+      final existingStop = location.day.stops[stopIndex];
+      final draft = _normalizeStopDraft(
+        stop.copyWith(id: existingStop.id),
+        sortOrder: existingStop.sortOrder,
+      );
 
-    final savedStop = await _updateStopWithParking(
-      previous: existingStop,
-      next: draft,
-    );
+      final savedStop = await _updateStopWithParking(
+        previous: existingStop,
+        next: draft,
+      );
 
-    final nextStops = [...location.day.stops]..[stopIndex] = savedStop;
-    final updatedStops = existingStop.timeLabel == savedStop.timeLabel
-        ? _normalizeStopsInCurrentOrder(nextStops)
-        : _normalizeStops(nextStops);
-    var updatedTrip = _replaceDayAt(
-      location.trip,
-      location.dayIndex,
-      location.day.copyWith(stops: updatedStops),
-    );
-    if (savedStop.color != existingStop.color) {
-      updatedTrip = _withSavedCustomStopColor(updatedTrip, savedStop.color);
-    }
+      final nextStops = [...location.day.stops]..[stopIndex] = savedStop;
+      final updatedStops = existingStop.timeLabel == savedStop.timeLabel
+          ? _normalizeStopsInCurrentOrder(nextStops)
+          : _normalizeStops(nextStops);
+      var updatedTrip = _replaceDayAt(
+        location.trip,
+        location.dayIndex,
+        location.day.copyWith(stops: updatedStops),
+      );
+      if (savedStop.color != existingStop.color) {
+        updatedTrip = _withSavedCustomStopColor(updatedTrip, savedStop.color);
+      }
 
-    updatedTrip = _commitTripUpdate(updatedTrip) ?? updatedTrip;
-    await _withSessionGuard(
-      () => _stopService.reorderStops(
-        dayId: location.day.id,
-        stops: updatedStops,
-      ),
-    );
-    await _refreshTripReminders(updatedTrip);
-    _persistSnapshotInBackground();
-    notifyListeners();
-    return updatedStops.firstWhere((item) => item.id == savedStop.id,
-        orElse: () => savedStop);
+      updatedTrip = _commitTripUpdate(updatedTrip) ?? updatedTrip;
+      await _withSessionGuard(
+        () => _stopService.reorderStops(
+          dayId: location.day.id,
+          stops: updatedStops,
+        ),
+      );
+      await _refreshTripReminders(updatedTrip);
+      _persistSnapshotInBackground();
+      notifyListeners();
+      return updatedStops.firstWhere((item) => item.id == savedStop.id,
+          orElse: () => savedStop);
+    });
   }
 
   Future<void> reorderStops({
@@ -282,43 +287,45 @@ class TripStore extends ChangeNotifier {
     required int oldIndex,
     required int newIndex,
   }) async {
-    final location = _findEditableDayLocation(tripId, dayId);
-    if (location == null) {
-      throw StateError('Trip or day not found, or trip is read-only.');
-    }
+    return DiagnosticLog.instance.trace('排序地點', () async {
+      final location = _findEditableDayLocation(tripId, dayId);
+      if (location == null) {
+        throw StateError('Trip or day not found, or trip is read-only.');
+      }
 
-    final stops = [...location.day.stops];
-    if (oldIndex < 0 ||
-        oldIndex >= stops.length ||
-        newIndex < 0 ||
-        newIndex > stops.length) {
-      return;
-    }
+      final stops = [...location.day.stops];
+      if (oldIndex < 0 ||
+          oldIndex >= stops.length ||
+          newIndex < 0 ||
+          newIndex > stops.length) {
+        return;
+      }
 
-    var targetIndex = newIndex;
-    if (oldIndex < targetIndex) {
-      targetIndex -= 1;
-    }
+      var targetIndex = newIndex;
+      if (oldIndex < targetIndex) {
+        targetIndex -= 1;
+      }
 
-    final movedStop = stops.removeAt(oldIndex);
-    stops.insert(targetIndex, movedStop);
-    final reorderedStops = _normalizeStopsInCurrentOrder(stops);
-    var updatedTrip = _replaceDayAt(
-      location.trip,
-      location.dayIndex,
-      location.day.copyWith(stops: reorderedStops),
-    );
+      final movedStop = stops.removeAt(oldIndex);
+      stops.insert(targetIndex, movedStop);
+      final reorderedStops = _normalizeStopsInCurrentOrder(stops);
+      var updatedTrip = _replaceDayAt(
+        location.trip,
+        location.dayIndex,
+        location.day.copyWith(stops: reorderedStops),
+      );
 
-    updatedTrip = _commitTripUpdate(updatedTrip) ?? updatedTrip;
-    await _withSessionGuard(
-      () => _stopService.reorderStops(
-        dayId: location.day.id,
-        stops: reorderedStops,
-      ),
-    );
-    await _refreshTripReminders(updatedTrip);
-    _persistSnapshotInBackground();
-    notifyListeners();
+      updatedTrip = _commitTripUpdate(updatedTrip) ?? updatedTrip;
+      await _withSessionGuard(
+        () => _stopService.reorderStops(
+          dayId: location.day.id,
+          stops: reorderedStops,
+        ),
+      );
+      await _refreshTripReminders(updatedTrip);
+      _persistSnapshotInBackground();
+      notifyListeners();
+    });
   }
 
   Future<bool> deleteStop({
@@ -326,42 +333,44 @@ class TripStore extends ChangeNotifier {
     required String dayId,
     required String stopId,
   }) async {
-    final location = _findEditableDayLocation(tripId, dayId);
-    if (location == null) {
-      return false;
-    }
+    return DiagnosticLog.instance.trace('刪除地點', () async {
+      final location = _findEditableDayLocation(tripId, dayId);
+      if (location == null) {
+        return false;
+      }
 
-    final stopIndex =
-        location.day.stops.indexWhere((item) => item.id == stopId);
-    if (stopIndex == -1) {
-      return false;
-    }
+      final stopIndex =
+          location.day.stops.indexWhere((item) => item.id == stopId);
+      if (stopIndex == -1) {
+        return false;
+      }
 
-    final stop = location.day.stops[stopIndex];
-    if (stop.id == null || stop.id!.isEmpty) {
-      return false;
-    }
+      final stop = location.day.stops[stopIndex];
+      if (stop.id == null || stop.id!.isEmpty) {
+        return false;
+      }
 
-    await _withSessionGuard(() => _stopService.deleteStop(stop.id!));
-    final updatedStops = _normalizeStopsInCurrentOrder(
-        [...location.day.stops]..removeAt(stopIndex));
-    var updatedTrip = _replaceDayAt(
-      location.trip,
-      location.dayIndex,
-      location.day.copyWith(stops: updatedStops),
-    );
+      await _withSessionGuard(() => _stopService.deleteStop(stop.id!));
+      final updatedStops = _normalizeStopsInCurrentOrder(
+          [...location.day.stops]..removeAt(stopIndex));
+      var updatedTrip = _replaceDayAt(
+        location.trip,
+        location.dayIndex,
+        location.day.copyWith(stops: updatedStops),
+      );
 
-    updatedTrip = _commitTripUpdate(updatedTrip) ?? updatedTrip;
-    await _withSessionGuard(
-      () => _stopService.reorderStops(
-        dayId: location.day.id,
-        stops: updatedStops,
-      ),
-    );
-    await _refreshTripReminders(updatedTrip);
-    _persistSnapshotInBackground();
-    notifyListeners();
-    return true;
+      updatedTrip = _commitTripUpdate(updatedTrip) ?? updatedTrip;
+      await _withSessionGuard(
+        () => _stopService.reorderStops(
+          dayId: location.day.id,
+          stops: updatedStops,
+        ),
+      );
+      await _refreshTripReminders(updatedTrip);
+      _persistSnapshotInBackground();
+      notifyListeners();
+      return true;
+    });
   }
 
   /// Update the in-memory photo list for a stop after uploads/deletions.
@@ -399,18 +408,20 @@ class TripStore extends ChangeNotifier {
     required String stopId,
     required ParkingSpot parkingSpot,
   }) async {
-    final stop = findStop(tripId, dayId, stopId);
-    if (stop == null) {
-      throw StateError('Stop not found.');
-    }
+    return DiagnosticLog.instance.trace('新增停車場', () async {
+      final stop = findStop(tripId, dayId, stopId);
+      if (stop == null) {
+        throw StateError('Stop not found.');
+      }
 
-    final savedStop = await updateStop(
-      tripId: tripId,
-      dayId: dayId,
-      stop: stop.copyWith(parkingSpots: [...stop.parkingSpots, parkingSpot]),
-    );
+      final savedStop = await updateStop(
+        tripId: tripId,
+        dayId: dayId,
+        stop: stop.copyWith(parkingSpots: [...stop.parkingSpots, parkingSpot]),
+      );
 
-    return savedStop.parkingSpots.last;
+      return savedStop.parkingSpots.last;
+    });
   }
 
   Future<void> updateParkingSpot({
@@ -419,24 +430,26 @@ class TripStore extends ChangeNotifier {
     required String stopId,
     required ParkingSpot parkingSpot,
   }) async {
-    final stop = findStop(tripId, dayId, stopId);
-    if (stop == null) {
-      throw StateError('Stop not found.');
-    }
+    return DiagnosticLog.instance.trace('更新停車場', () async {
+      final stop = findStop(tripId, dayId, stopId);
+      if (stop == null) {
+        throw StateError('Stop not found.');
+      }
 
-    final parkingIndex =
-        stop.parkingSpots.indexWhere((item) => item.id == parkingSpot.id);
-    if (parkingIndex == -1) {
-      throw StateError('Parking spot not found.');
-    }
+      final parkingIndex =
+          stop.parkingSpots.indexWhere((item) => item.id == parkingSpot.id);
+      if (parkingIndex == -1) {
+        throw StateError('Parking spot not found.');
+      }
 
-    final updatedParkingSpots = [...stop.parkingSpots]..[parkingIndex] =
-        parkingSpot;
-    await updateStop(
-      tripId: tripId,
-      dayId: dayId,
-      stop: stop.copyWith(parkingSpots: updatedParkingSpots),
-    );
+      final updatedParkingSpots = [...stop.parkingSpots]..[parkingIndex] =
+          parkingSpot;
+      await updateStop(
+        tripId: tripId,
+        dayId: dayId,
+        stop: stop.copyWith(parkingSpots: updatedParkingSpots),
+      );
+    });
   }
 
   Future<void> removeParkingSpot({
@@ -445,18 +458,20 @@ class TripStore extends ChangeNotifier {
     required String stopId,
     required String parkingSpotId,
   }) async {
-    final stop = findStop(tripId, dayId, stopId);
-    if (stop == null) {
-      throw StateError('Stop not found.');
-    }
+    return DiagnosticLog.instance.trace('刪除停車場', () async {
+      final stop = findStop(tripId, dayId, stopId);
+      if (stop == null) {
+        throw StateError('Stop not found.');
+      }
 
-    final updatedParkingSpots =
-        stop.parkingSpots.where((item) => item.id != parkingSpotId).toList();
-    await updateStop(
-      tripId: tripId,
-      dayId: dayId,
-      stop: stop.copyWith(parkingSpots: updatedParkingSpots),
-    );
+      final updatedParkingSpots =
+          stop.parkingSpots.where((item) => item.id != parkingSpotId).toList();
+      await updateStop(
+        tripId: tripId,
+        dayId: dayId,
+        stop: stop.copyWith(parkingSpots: updatedParkingSpots),
+      );
+    });
   }
 
   Future<TripSummary> createTrip({
@@ -465,20 +480,22 @@ class TripStore extends ChangeNotifier {
     required DateTime endDate,
     String? color,
   }) async {
-    final trip = await _withSessionGuardNoRetry(
-      () => _tripService.createTrip(
-        title: title,
-        startDate: startDate,
-        endDate: endDate,
-        color: color,
-      ),
-    );
+    return DiagnosticLog.instance.trace('建立旅程', () async {
+      final trip = await _withSessionGuardNoRetry(
+        () => _tripService.createTrip(
+          title: title,
+          startDate: startDate,
+          endDate: endDate,
+          color: color,
+        ),
+      );
 
-    _trips.insert(0, trip);
-    await NotificationService.instance.scheduleTripReminders(trip);
-    _persistSnapshotInBackground();
-    notifyListeners();
-    return trip;
+      _trips.insert(0, trip);
+      await NotificationService.instance.scheduleTripReminders(trip);
+      _persistSnapshotInBackground();
+      notifyListeners();
+      return trip;
+    });
   }
 
   /// Invite a user to a trip by their email address (owner-only).
@@ -487,133 +504,146 @@ class TripStore extends ChangeNotifier {
     String email,
     TripPermission permission,
   ) async {
-    return _withSessionGuardNoRetry(
-      () => _tripService.inviteMemberByEmail(tripId, email, permission),
-    );
+    return DiagnosticLog.instance.trace('邀請成員', () async {
+      return _withSessionGuardNoRetry(
+        () => _tripService.inviteMemberByEmail(tripId, email, permission),
+      );
+    }, isSuccess: (result) => result.isSuccess);
   }
 
   Future<bool> deleteTrip(String tripId) async {
-    final index = _trips
-        .indexWhere((trip) => trip.id == tripId && trip.role == TripRole.owner);
-    if (index == -1) {
-      return false;
-    }
+    return DiagnosticLog.instance.trace('刪除旅程', () async {
+      final index = _trips.indexWhere(
+          (trip) => trip.id == tripId && trip.role == TripRole.owner);
+      if (index == -1) {
+        return false;
+      }
 
-    final deleted =
-        await _withSessionGuard(() => _tripService.deleteOwnedTrip(tripId));
-    if (!deleted) {
-      return false;
-    }
+      final deleted =
+          await _withSessionGuard(() => _tripService.deleteOwnedTrip(tripId));
+      if (!deleted) {
+        return false;
+      }
 
-    _trips.removeAt(index);
-    await NotificationService.instance.cancelTripReminders(tripId);
-    _persistSnapshotInBackground();
-    notifyListeners();
-    return true;
+      _trips.removeAt(index);
+      await NotificationService.instance.cancelTripReminders(tripId);
+      _persistSnapshotInBackground();
+      notifyListeners();
+      return true;
+    });
   }
 
   Future<bool> setTripArchived(String tripId, bool isArchived) async {
-    final index = _trips.indexWhere(
-      (trip) => trip.id == tripId && trip.role == TripRole.owner,
-    );
-    if (index == -1) return false;
+    return DiagnosticLog.instance.trace('封存或還原旅程', () async {
+      final index = _trips.indexWhere(
+        (trip) => trip.id == tripId && trip.role == TripRole.owner,
+      );
+      if (index == -1) return false;
 
-    final archiveEventGeneration = _archiveEventGenerations[tripId] ?? 0;
+      final archiveEventGeneration = _archiveEventGenerations[tripId] ?? 0;
 
-    final updated = await _withSessionGuard(
-      () => _tripService.setOwnedTripArchived(tripId, isArchived),
-    );
-    if (!updated) return false;
+      final updated = await _withSessionGuard(
+        () => _tripService.setOwnedTripArchived(tripId, isArchived),
+      );
+      if (!updated) return false;
 
-    _archivedMutationGeneration++;
+      _archivedMutationGeneration++;
 
-    // A newer archive event may have arrived from another device while this
-    // RPC was pending. Its state is authoritative, so do not overwrite it
-    // with the older local request after the response returns.
-    if ((_archiveEventGenerations[tripId] ?? 0) != archiveEventGeneration) {
+      // A newer archive event may have arrived from another device while this
+      // RPC was pending. Its state is authoritative, so do not overwrite it
+      // with the older local request after the response returns.
+      if ((_archiveEventGenerations[tripId] ?? 0) != archiveEventGeneration) {
+        return true;
+      }
+
+      final updatedIndex = _trips.indexWhere(
+        (trip) => trip.id == tripId && trip.role == TripRole.owner,
+      );
+      if (updatedIndex == -1) return false;
+
+      final trip = _trips[updatedIndex].copyWith(isArchived: isArchived);
+      _trips[updatedIndex] = trip;
+      if (isArchived) {
+        await NotificationService.instance.cancelTripReminders(tripId);
+      } else {
+        await NotificationService.instance.scheduleTripReminders(trip);
+      }
+      _persistSnapshotInBackground();
+      notifyListeners();
       return true;
-    }
-
-    final updatedIndex = _trips.indexWhere(
-      (trip) => trip.id == tripId && trip.role == TripRole.owner,
-    );
-    if (updatedIndex == -1) return false;
-
-    final trip = _trips[updatedIndex].copyWith(isArchived: isArchived);
-    _trips[updatedIndex] = trip;
-    if (isArchived) {
-      await NotificationService.instance.cancelTripReminders(tripId);
-    } else {
-      await NotificationService.instance.scheduleTripReminders(trip);
-    }
-    _persistSnapshotInBackground();
-    notifyListeners();
-    return true;
+    });
   }
 
   Future<bool> leaveSharedTrip(String tripId) async {
-    final index = _trips
-        .indexWhere((trip) => trip.id == tripId && trip.role == TripRole.guest);
-    if (index == -1) {
-      return false;
-    }
+    return DiagnosticLog.instance.trace('退出旅程', () async {
+      final index = _trips.indexWhere(
+          (trip) => trip.id == tripId && trip.role == TripRole.guest);
+      if (index == -1) {
+        return false;
+      }
 
-    final left =
-        await _withSessionGuard(() => _tripService.leaveSharedTrip(tripId));
-    if (!left) {
-      return false;
-    }
+      final left =
+          await _withSessionGuard(() => _tripService.leaveSharedTrip(tripId));
+      if (!left) {
+        return false;
+      }
 
-    _archivedMutationGeneration++;
-    final updatedIndex = _trips.indexWhere(
-      (trip) => trip.id == tripId && trip.role == TripRole.guest,
-    );
-    if (updatedIndex == -1) {
-      // The Realtime membership DELETE can win the race with the REST
-      // response. The backend removal still succeeded, so report success.
-      _membersByTripId.remove(tripId);
+      _archivedMutationGeneration++;
+      final updatedIndex = _trips.indexWhere(
+        (trip) => trip.id == tripId && trip.role == TripRole.guest,
+      );
+      if (updatedIndex == -1) {
+        // The Realtime membership DELETE can win the race with the REST
+        // response. The backend removal still succeeded, so report success.
+        _membersByTripId.remove(tripId);
+        return true;
+      }
+
+      _trips.removeAt(updatedIndex);
+      await NotificationService.instance.cancelTripReminders(tripId);
+      _persistSnapshotInBackground();
+      notifyListeners();
       return true;
-    }
-
-    _trips.removeAt(updatedIndex);
-    await NotificationService.instance.cancelTripReminders(tripId);
-    _persistSnapshotInBackground();
-    notifyListeners();
-    return true;
+    });
   }
 
   Future<bool> updateTripColor(String tripId, String? color) async {
-    final index = _trips.indexWhere(
-      (trip) => trip.id == tripId && trip.canEdit,
-    );
-    if (index == -1) {
-      return false;
-    }
+    return DiagnosticLog.instance.trace('更新旅程顏色', () async {
+      final index = _trips.indexWhere(
+        (trip) => trip.id == tripId && trip.canEdit,
+      );
+      if (index == -1) {
+        return false;
+      }
 
-    await _withSessionGuard(() => _tripService.updateTripColor(tripId, color));
-    _trips[index] = _trips[index].copyWith(color: color);
-    _persistSnapshotInBackground();
-    notifyListeners();
-    return true;
+      await _withSessionGuard(
+          () => _tripService.updateTripColor(tripId, color));
+      _trips[index] = _trips[index].copyWith(color: color);
+      _persistSnapshotInBackground();
+      notifyListeners();
+      return true;
+    });
   }
 
   Future<bool> removeCustomStopColor(String tripId, String color) async {
-    final index = _trips.indexWhere(
-      (trip) => trip.id == tripId && trip.canEdit,
-    );
-    if (index == -1) return false;
-    await _withSessionGuard(
-      () => _tripService.removeCustomStopColor(tripId, color),
-    );
-    final current = _trips[index];
-    _trips[index] = current.copyWith(
-      customStopColors: current.customStopColors
-          .where((item) => item != color)
-          .toList(growable: false),
-    );
-    _persistSnapshotInBackground();
-    notifyListeners();
-    return true;
+    return DiagnosticLog.instance.trace('移除色票', () async {
+      final index = _trips.indexWhere(
+        (trip) => trip.id == tripId && trip.canEdit,
+      );
+      if (index == -1) return false;
+      await _withSessionGuard(
+        () => _tripService.removeCustomStopColor(tripId, color),
+      );
+      final current = _trips[index];
+      _trips[index] = current.copyWith(
+        customStopColors: current.customStopColors
+            .where((item) => item != color)
+            .toList(growable: false),
+      );
+      _persistSnapshotInBackground();
+      notifyListeners();
+      return true;
+    });
   }
 
   TripSummary _withSavedCustomStopColor(TripSummary trip, String? color) {
@@ -626,11 +656,13 @@ class TripStore extends ChangeNotifier {
 
   /// Fetch the member list for [tripId] (owner-only operation).
   Future<List<TripMember>> fetchTripMembers(String tripId) async {
-    await _ensureTripIsActive(tripId);
-    final members =
-        await _withSessionGuard(() => _tripService.fetchTripMembers(tripId));
-    _membersByTripId[tripId] = members;
-    return members;
+    return DiagnosticLog.instance.trace('載入成員', () async {
+      await _ensureTripIsActive(tripId);
+      final members =
+          await _withSessionGuard(() => _tripService.fetchTripMembers(tripId));
+      _membersByTripId[tripId] = members;
+      return members;
+    });
   }
 
   List<TripMember>? cachedMembers(String tripId) => _membersByTripId[tripId];
@@ -641,30 +673,34 @@ class TripStore extends ChangeNotifier {
     String userId,
     TripPermission permission,
   ) async {
-    await _ensureTripIsActive(tripId);
-    await _withSessionGuard(
-      () => _tripService.updateMemberPermission(tripId, userId, permission),
-    );
-    final members = _membersByTripId[tripId];
-    if (members != null) {
-      _membersByTripId[tripId] = [
-        for (final m in members)
-          m.userId == userId ? m.copyWith(permission: permission) : m,
-      ];
-      notifyListeners();
-    }
+    return DiagnosticLog.instance.trace('調整成員權限', () async {
+      await _ensureTripIsActive(tripId);
+      await _withSessionGuard(
+        () => _tripService.updateMemberPermission(tripId, userId, permission),
+      );
+      final members = _membersByTripId[tripId];
+      if (members != null) {
+        _membersByTripId[tripId] = [
+          for (final m in members)
+            m.userId == userId ? m.copyWith(permission: permission) : m,
+        ];
+        notifyListeners();
+      }
+    });
   }
 
   /// Remove a member from the trip (owner-only).
   Future<void> removeMember(String tripId, String userId) async {
-    await _ensureTripIsActive(tripId);
-    await _withSessionGuard(() => _tripService.removeMember(tripId, userId));
-    final members = _membersByTripId[tripId];
-    if (members != null) {
-      _membersByTripId[tripId] =
-          members.where((m) => m.userId != userId).toList();
-      notifyListeners();
-    }
+    return DiagnosticLog.instance.trace('移除成員', () async {
+      await _ensureTripIsActive(tripId);
+      await _withSessionGuard(() => _tripService.removeMember(tripId, userId));
+      final members = _membersByTripId[tripId];
+      if (members != null) {
+        _membersByTripId[tripId] =
+            members.where((m) => m.userId != userId).toList();
+        notifyListeners();
+      }
+    });
   }
 
   void resetForTests() {
@@ -748,6 +784,7 @@ class TripStore extends ChangeNotifier {
     // does await the unsubscribe.
     unawaited(
       _realtimeService.unsubscribe().catchError((Object error, StackTrace st) {
+        DiagnosticLog.instance.error('結束即時同步', error, st);
         debugPrint('TripStore.dispose: unsubscribe failed: $error');
       }),
     );
@@ -755,189 +792,197 @@ class TripStore extends ChangeNotifier {
   }
 
   Future<void> _loadTrips({required bool loadCacheFirst}) async {
-    // Capture the session token at the start.  If clearForSignOut() is called
-    // while this load is in-flight, the token will be incremented and we will
-    // discard the stale results rather than repopulating the store.
-    final token = _sessionToken;
-    _activeLoadGeneration++;
-    Session? session;
-    try {
-      session = Supabase.instance.client.auth.currentSession;
-    } catch (error) {
-      _loadError = error;
-      _isInitialized = true;
-      _isLoading = false;
-      _loadFuture = null;
-      notifyListeners();
-      return;
-    }
-    var userId = session?.user.id;
-    if (userId == null || userId.isEmpty) {
-      await _handleExpiredSession();
-      return;
-    }
-    if (session!.isExpired &&
-        !await SupabaseSessionGuard.refreshCurrentSessionIfExpired()) {
-      _cacheUserId = userId;
-      await _handleExpiredSession();
-      return;
-    }
-    session = Supabase.instance.client.auth.currentSession;
-    if (session == null || session.isExpired) {
-      _cacheUserId = userId;
-      await _handleExpiredSession();
-      return;
-    }
-    userId = session.user.id;
-    if (userId.isEmpty) {
-      await _handleExpiredSession();
-      return;
-    }
-    _cacheUserId = userId;
-
-    if (loadCacheFirst && !_isInitialized && _trips.isEmpty) {
-      await _loadCachedSnapshot(userId: userId, token: token);
-      if (_sessionToken != token) return;
-    }
-
-    _isLoading = true;
-    notifyListeners();
-
-    try {
+    return DiagnosticLog.instance.trace('載入或同步旅程', () async {
+      // Capture the session token at the start.  If clearForSignOut() is called
+      // while this load is in-flight, the token will be incremented and we will
+      // discard the stale results rather than repopulating the store.
+      final token = _sessionToken;
+      _activeLoadGeneration++;
+      Session? session;
       try {
-        await _realtimeService.subscribe(
-          onPermissionChanged: _onPermissionChanged,
-          onRemovedFromTrip: _onRemovedFromTrip,
-          onArchivedChanged: _onArchivedChanged,
-        );
-      } catch (error) {
-        // Realtime improves freshness but must not prevent the REST-backed
-        // trip list from loading when WebSocket access is unavailable.
-        debugPrint('Trip Realtime subscription unavailable: $error');
+        session = Supabase.instance.client.auth.currentSession;
+      } catch (error, stackTrace) {
+        DiagnosticLog.instance.error('旅程資料處理', error, stackTrace);
+        _loadError = error;
+        _isInitialized = true;
+        _isLoading = false;
+        _loadFuture = null;
+        notifyListeners();
+        return;
       }
-      // A local archive, restore, or leave operation can complete while this
-      // request is hydrating an older active snapshot. Retry instead of
-      // reporting a successful refresh with a discarded, stale response.
-      late List<TripSummary> loadedTrips;
-      while (true) {
-        final archivedMutationGeneration = _archivedMutationGeneration;
-        loadedTrips = await _withSessionGuard(
-          () => _tripService.fetchTripsForCurrentUser(isArchived: false),
-        );
-        if (_sessionToken != token) return;
-        if (_archivedMutationGeneration == archivedMutationGeneration) break;
-      }
-
-      final activeIds = {for (final trip in loadedTrips) trip.id};
-      // Keep archived cache entries that the active endpoint cannot confirm.
-      // If the active response contains an ID, it is authoritative: the trip
-      // was restored and must replace its cached archived version.
-      final archivedById = <String, TripSummary>{
-        for (final trip in _trips.where(
-          (trip) => trip.isArchived && !activeIds.contains(trip.id),
-        ))
-          trip.id: trip,
-      };
-      _trips
-        ..clear()
-        ..addAll(
-            loadedTrips.where((trip) => !archivedById.containsKey(trip.id)))
-        ..addAll(archivedById.values);
-      _areArchivedTripsLoaded = false;
-      _archivedLoadError = null;
-      if (_applyRealtimeChangesReceivedWhileLoading()) {
-        _persistSnapshotInBackground();
-      }
-      _loadError = null;
-      _isInitialized = true;
-      _hasCachedData = false;
-      NotificationService.instance.clearTrackedReminders();
-      for (final trip in _trips.where((trip) => !trip.isArchived)) {
-        await NotificationService.instance.scheduleTripReminders(trip);
-      }
-      // Guard again: reminders scheduling is also async.
-      if (_sessionToken != token) return;
-
-      final syncedAt = DateTime.now();
-      await _snapshotCache.saveForUser(userId, _trips, savedAt: syncedAt);
-      _lastSyncedAt = syncedAt;
-
-      // Final guard: drop the notifyListeners() if the session changed.
-      if (_sessionToken != token) return;
-    } catch (error) {
-      if (_sessionToken != token) return;
-      if (SupabaseSessionGuard.isSessionExpiredError(error)) {
+      var userId = session?.user.id;
+      if (userId == null || userId.isEmpty) {
         await _handleExpiredSession();
         return;
       }
-      _loadError = error;
-      _isInitialized = true;
-    } finally {
-      if (_sessionToken == token) {
-        _isLoading = false;
+      if (session!.isExpired &&
+          !await SupabaseSessionGuard.refreshCurrentSessionIfExpired()) {
+        _cacheUserId = userId;
+        await _handleExpiredSession();
+        return;
+      }
+      session = Supabase.instance.client.auth.currentSession;
+      if (session == null || session.isExpired) {
+        _cacheUserId = userId;
+        await _handleExpiredSession();
+        return;
+      }
+      userId = session.user.id;
+      if (userId.isEmpty) {
+        await _handleExpiredSession();
+        return;
+      }
+      _cacheUserId = userId;
+
+      if (loadCacheFirst && !_isInitialized && _trips.isEmpty) {
+        await _loadCachedSnapshot(userId: userId, token: token);
+        if (_sessionToken != token) return;
+      }
+
+      _isLoading = true;
+      notifyListeners();
+
+      try {
+        try {
+          await _realtimeService.subscribe(
+            onPermissionChanged: _onPermissionChanged,
+            onRemovedFromTrip: _onRemovedFromTrip,
+            onArchivedChanged: _onArchivedChanged,
+          );
+        } catch (error, stackTrace) {
+          DiagnosticLog.instance.error('旅程資料處理', error, stackTrace);
+          // Realtime improves freshness but must not prevent the REST-backed
+          // trip list from loading when WebSocket access is unavailable.
+          debugPrint('Trip Realtime subscription unavailable: $error');
+        }
+        // A local archive, restore, or leave operation can complete while this
+        // request is hydrating an older active snapshot. Retry instead of
+        // reporting a successful refresh with a discarded, stale response.
+        late List<TripSummary> loadedTrips;
+        while (true) {
+          final archivedMutationGeneration = _archivedMutationGeneration;
+          loadedTrips = await _withSessionGuard(
+            () => _tripService.fetchTripsForCurrentUser(isArchived: false),
+          );
+          if (_sessionToken != token) return;
+          if (_archivedMutationGeneration == archivedMutationGeneration) break;
+        }
+
+        final activeIds = {for (final trip in loadedTrips) trip.id};
+        // Keep archived cache entries that the active endpoint cannot confirm.
+        // If the active response contains an ID, it is authoritative: the trip
+        // was restored and must replace its cached archived version.
+        final archivedById = <String, TripSummary>{
+          for (final trip in _trips.where(
+            (trip) => trip.isArchived && !activeIds.contains(trip.id),
+          ))
+            trip.id: trip,
+        };
+        _trips
+          ..clear()
+          ..addAll(
+              loadedTrips.where((trip) => !archivedById.containsKey(trip.id)))
+          ..addAll(archivedById.values);
+        _areArchivedTripsLoaded = false;
+        _archivedLoadError = null;
         if (_applyRealtimeChangesReceivedWhileLoading()) {
           _persistSnapshotInBackground();
         }
-        _loadFuture = null;
-        notifyListeners();
+        _loadError = null;
+        _isInitialized = true;
+        _hasCachedData = false;
+        NotificationService.instance.clearTrackedReminders();
+        for (final trip in _trips.where((trip) => !trip.isArchived)) {
+          await NotificationService.instance.scheduleTripReminders(trip);
+        }
+        // Guard again: reminders scheduling is also async.
+        if (_sessionToken != token) return;
+
+        final syncedAt = DateTime.now();
+        await _snapshotCache.saveForUser(userId, _trips, savedAt: syncedAt);
+        _lastSyncedAt = syncedAt;
+
+        // Final guard: drop the notifyListeners() if the session changed.
+        if (_sessionToken != token) return;
+      } catch (error, stackTrace) {
+        DiagnosticLog.instance.error('旅程資料處理', error, stackTrace);
+        if (_sessionToken != token) return;
+        if (SupabaseSessionGuard.isSessionExpiredError(error)) {
+          await _handleExpiredSession();
+          return;
+        }
+        _loadError = error;
+        _isInitialized = true;
+      } finally {
+        if (_sessionToken == token) {
+          _isLoading = false;
+          if (_applyRealtimeChangesReceivedWhileLoading()) {
+            _persistSnapshotInBackground();
+          }
+          _loadFuture = null;
+          notifyListeners();
+        }
       }
-    }
+    }, isSuccess: (_) => _loadError == null);
   }
 
   Future<void> _loadArchivedTrips() async {
-    final token = _sessionToken;
-    _isLoadingArchived = true;
-    notifyListeners();
-    try {
-      await ensureLoaded();
-      if (_sessionToken != token || !_isInitialized) return;
+    return DiagnosticLog.instance.trace('載入封存旅程', () async {
+      final token = _sessionToken;
+      _isLoadingArchived = true;
+      notifyListeners();
+      try {
+        await ensureLoaded();
+        if (_sessionToken != token || !_isInitialized) return;
 
-      // The archived subset can only replace the in-memory active subset if
-      // no newer active refresh has begun since this request's prerequisite
-      // active load completed.
-      final activeLoadGeneration = _activeLoadGeneration;
-      final archivedMutationGeneration = _archivedMutationGeneration;
+        // The archived subset can only replace the in-memory active subset if
+        // no newer active refresh has begun since this request's prerequisite
+        // active load completed.
+        final activeLoadGeneration = _activeLoadGeneration;
+        final archivedMutationGeneration = _archivedMutationGeneration;
 
-      final loadedTrips = await _withSessionGuard(
-        () => _tripService.fetchTripsForCurrentUser(isArchived: true),
-      );
-      if (_sessionToken != token ||
-          _activeLoadGeneration != activeLoadGeneration ||
-          _archivedMutationGeneration != archivedMutationGeneration) {
-        return;
-      }
-
-      final loadedById = <String, TripSummary>{
-        for (final trip in loadedTrips) trip.id: trip,
-      };
-      // This response is the authoritative archived subset. Replace matching
-      // stale active rows as well as previously loaded archived rows.
-      for (final trip in _trips.where(
-        (trip) => !trip.isArchived && loadedById.containsKey(trip.id),
-      )) {
-        unawaited(NotificationService.instance.cancelTripReminders(trip.id));
-      }
-      _trips.removeWhere(
-        (trip) => trip.isArchived || loadedById.containsKey(trip.id),
-      );
-      _trips.addAll(loadedById.values);
-      _areArchivedTripsLoaded = true;
-      _archivedLoadError = null;
-      _applyRealtimeChangesReceivedWhileLoading();
-      _persistSnapshotInBackground();
-    } catch (error) {
-      if (_sessionToken != token) return;
-      _archivedLoadError = error;
-    } finally {
-      if (_sessionToken == token) {
-        _isLoadingArchived = false;
-        if (_applyRealtimeChangesReceivedWhileLoading()) {
-          _persistSnapshotInBackground();
+        final loadedTrips = await _withSessionGuard(
+          () => _tripService.fetchTripsForCurrentUser(isArchived: true),
+        );
+        if (_sessionToken != token ||
+            _activeLoadGeneration != activeLoadGeneration ||
+            _archivedMutationGeneration != archivedMutationGeneration) {
+          return;
         }
-        _archivedLoadFuture = null;
-        notifyListeners();
+
+        final loadedById = <String, TripSummary>{
+          for (final trip in loadedTrips) trip.id: trip,
+        };
+        // This response is the authoritative archived subset. Replace matching
+        // stale active rows as well as previously loaded archived rows.
+        for (final trip in _trips.where(
+          (trip) => !trip.isArchived && loadedById.containsKey(trip.id),
+        )) {
+          unawaited(NotificationService.instance.cancelTripReminders(trip.id));
+        }
+        _trips.removeWhere(
+          (trip) => trip.isArchived || loadedById.containsKey(trip.id),
+        );
+        _trips.addAll(loadedById.values);
+        _areArchivedTripsLoaded = true;
+        _archivedLoadError = null;
+        _applyRealtimeChangesReceivedWhileLoading();
+        _persistSnapshotInBackground();
+      } catch (error, stackTrace) {
+        DiagnosticLog.instance.error('旅程資料處理', error, stackTrace);
+        if (_sessionToken != token) return;
+        _archivedLoadError = error;
+      } finally {
+        if (_sessionToken == token) {
+          _isLoadingArchived = false;
+          if (_applyRealtimeChangesReceivedWhileLoading()) {
+            _persistSnapshotInBackground();
+          }
+          _archivedLoadFuture = null;
+          notifyListeners();
+        }
       }
-    }
+    }, isSuccess: (_) => _archivedLoadError == null);
   }
 
   Future<void> _loadCachedSnapshot({
@@ -980,6 +1025,7 @@ class TripStore extends ChangeNotifier {
       _snapshotCache
           .saveForUser(userId, tripsSnapshot, savedAt: savedAt)
           .catchError((Object error, StackTrace stackTrace) {
+        DiagnosticLog.instance.error('儲存本機快取', error, stackTrace);
         debugPrint('Failed to persist trip snapshot: $error');
       }),
     );
@@ -988,16 +1034,19 @@ class TripStore extends ChangeNotifier {
   Future<T> _withSessionGuard<T>(Future<T> Function() action) async {
     try {
       return await action();
-    } catch (error) {
+    } catch (error, stackTrace) {
+      DiagnosticLog.instance.error('旅程資料處理', error, stackTrace);
       if (!SupabaseSessionGuard.isSessionExpiredError(error)) {
         rethrow;
       }
       if (await SupabaseSessionGuard.refreshCurrentSessionIfExpired(
         forceRefresh: true,
       )) {
+        DiagnosticLog.instance.event(DiagnosticKind.operation, '登入刷新後重試');
         try {
           return await action();
         } catch (retryError, retryStackTrace) {
+          DiagnosticLog.instance.error('重試失敗', retryError, retryStackTrace);
           if (SupabaseSessionGuard.isSessionExpiredError(retryError)) {
             await _handleExpiredSession();
           }
@@ -1012,7 +1061,8 @@ class TripStore extends ChangeNotifier {
   Future<T> _withSessionGuardNoRetry<T>(Future<T> Function() action) async {
     try {
       return await action();
-    } catch (error) {
+    } catch (error, stackTrace) {
+      DiagnosticLog.instance.error('旅程資料處理', error, stackTrace);
       if (!SupabaseSessionGuard.isSessionExpiredError(error)) {
         rethrow;
       }
@@ -1030,7 +1080,8 @@ class TripStore extends ChangeNotifier {
         _cacheUserId ?? Supabase.instance.client.auth.currentUser?.id;
     try {
       await Supabase.instance.client.auth.signOut();
-    } catch (error) {
+    } catch (error, stackTrace) {
+      DiagnosticLog.instance.error('旅程資料處理', error, stackTrace);
       debugPrint('Failed to sign out after expired session: $error');
     }
 
@@ -1185,7 +1236,8 @@ class TripStore extends ChangeNotifier {
       }
       _persistSnapshotInBackground();
       notifyListeners();
-    } catch (error) {
+    } catch (error, stackTrace) {
+      DiagnosticLog.instance.error('旅程資料處理', error, stackTrace);
       // A later full refresh will retry this best-effort Realtime repair.
       debugPrint('Failed to load trip for archive event $tripId: $error');
     } finally {

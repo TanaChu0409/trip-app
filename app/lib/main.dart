@@ -1,3 +1,7 @@
+import 'package:trip_planner_app/core/diagnostics/diagnostic_log.dart';
+import 'package:trip_planner_app/core/diagnostics/diagnostic_screen.dart';
+import 'package:trip_planner_app/core/diagnostics/diagnostic_errors.dart';
+import 'package:trip_planner_app/core/diagnostics/diagnostic_observer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,11 +13,12 @@ import 'package:trip_planner_app/core/theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  DiagnosticErrors.install();
 
   try {
     // Supabase must receive cold-start OAuth links before the invite listener
     // subscribes to AppLinks' shared broadcast stream.
-    await AppSupabaseConfig.initialize();
+    await DiagnosticLog.instance.trace('啟動', AppSupabaseConfig.initialize);
     final invites = InviteLinkController(await SharedPreferences.getInstance());
     await invites.initialize();
     runApp(ProviderScope(
@@ -31,23 +36,23 @@ Future<void> main() async {
         ],
       ),
     );
-    runApp(_StartupFailureApp(error: error));
+    runApp(StartupFailureApp(error: error));
   }
 }
 
-class _StartupFailureApp extends StatelessWidget {
-  const _StartupFailureApp({required this.error});
+class StartupFailureApp extends StatelessWidget {
+  const StartupFailureApp({super.key, required this.error});
 
   final Object error;
 
   @override
   Widget build(BuildContext context) {
     final message = SupabaseErrorFormatter.userMessage(error);
-    final details = SupabaseErrorFormatter.diagnosticDetails(error);
 
     return MaterialApp(
-      title: '旅遊規劃APP',
+      title: '旅遊規劃 APP',
       theme: buildAppTheme(),
+      navigatorObservers: [DiagnosticObserver()],
       debugShowCheckedModeBanner: false,
       home: Scaffold(
         body: SafeArea(
@@ -63,19 +68,13 @@ class _StartupFailureApp extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Supabase 初始化失敗',
+                        Text('暫時無法啟動',
                             style: Theme.of(context).textTheme.headlineSmall),
                         const SizedBox(height: 12),
                         Text(message),
                         const SizedBox(height: 16),
-                        const Text('建議檢查：'),
-                        const SizedBox(height: 8),
-                        const Text(
-                            '1. 啟動或 build 時是否透過 --dart-define 或 --dart-define-from-file 提供 SUPABASE_URL、SUPABASE_ANON_KEY'),
-                        const Text('2. Supabase SQL migrations 是否已完整執行'),
-                        const Text('3. 本機網路是否能連到 Supabase 專案'),
-                        const SizedBox(height: 16),
-                        SelectableText('診斷資訊: $details'),
+                        const Text('請稍後重新開啟應用程式。'),
+                        const DiagnosticButton(),
                       ],
                     ),
                   ),

@@ -197,7 +197,7 @@ class StopCard extends StatelessWidget {
                       isArchived
                           ? '此旅程已封存，僅供瀏覽。'
                           : isReadOnly
-                              ? '唯讀模式仍可接收通知。'
+                              ? '此旅程僅限查看，可瀏覽地點資訊。'
                               : '點擊可編輯，長按拖曳可調整順序。',
                     ),
                   ],

@@ -1,3 +1,5 @@
+import 'package:http/http.dart' as http;
+import 'package:trip_planner_app/core/diagnostics/diagnostic_http_client.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AppSupabaseConfig {
@@ -10,6 +12,7 @@ class AppSupabaseConfig {
     await Supabase.initialize(
       url: _readRequiredEnv('SUPABASE_URL'),
       anonKey: _readRequiredEnv('SUPABASE_ANON_KEY'),
+      httpClient: DiagnosticHttpClient(http.Client()),
     );
   }
 
