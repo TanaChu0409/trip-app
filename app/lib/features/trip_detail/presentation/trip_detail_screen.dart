@@ -311,7 +311,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
             title: Text(isArchived ? '封存旅程？' : '還原旅程？'),
             content: Text(isArchived
                 ? '封存後，所有成員只能從封存頁查看此旅程，且無法編輯或使用導航。'
-                : '還原後，旅程會重新出現在一般列表並恢復提醒。'),
+                : '還原後，旅程會重新出現在一般列表。'),
             actions: [
               TextButton(
                   onPressed: () => Navigator.of(context).pop(false),
@@ -382,7 +382,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                     selectedColor: selectedColor,
                     onColorChanged: (value) =>
                         setSheetState(() => selectedColor = value),
-                    description: '選擇後立即套用至整個旅程。',
+                    description: '選好顏色後，關閉此視窗即可儲存。',
                   ),
                   const SizedBox(height: 24),
                   FilledButton(
@@ -422,7 +422,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('刪除旅程？'),
-            content: Text('此動作無法復原，${trip.title} 的所有行程與提醒都會刪除。'),
+            content: Text('此動作無法復原，${trip.title} 的所有行程資料都會刪除。'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
@@ -465,7 +465,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('退出分享旅程？'),
-            content: Text('退出後，${trip.title} 將從分享列表移除，相關提醒也會清掉。'),
+            content: Text('退出後，${trip.title} 將從分享列表移除。'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
@@ -650,7 +650,7 @@ class _TripHeader extends StatelessWidget {
           child: Text('退出旅程'),
         ),
       ],
-      child: const Chip(label: Text('唯讀')),
+      child: const Chip(label: Text('僅限查看')),
     );
   }
 }
@@ -708,12 +708,12 @@ class _TripSummaryCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               trip.isArchived
-                  ? '此旅程已封存，僅供瀏覽；編輯、邀請與導航提醒均已暫停。'
+                  ? '此旅程已封存，僅供瀏覽；編輯、邀請與導航均無法使用。'
                   : switch (trip.role) {
-                      TripRole.owner => 'Owner 模式，可直接新增、編輯、刪除與排序行程地點。',
+                      TripRole.owner => '你是旅程擁有者，可新增、編輯、刪除與排序地點。',
                       TripRole.guest => trip.permission == TripPermission.editor
                           ? '協作模式，可新增、編輯、刪除行程地點與更改顏色。'
-                          : '受邀唯讀模式，可接收時程提醒與地點提醒。',
+                          : '你目前僅限查看此旅程，可瀏覽地點與開啟地圖。',
                     },
             ),
             if (!trip.isArchived && trip.role == TripRole.owner) ...[
@@ -730,7 +730,7 @@ class _TripSummaryCard extends StatelessWidget {
               runSpacing: 12,
               children: [
                 _MiniStat(value: '${trip.days.length}', label: '天數'),
-                _MiniStat(value: '${trip.stopCount}', label: '停靠點'),
+                _MiniStat(value: '${trip.stopCount}', label: '地點'),
               ],
             ),
             if (!trip.isArchived) ...[

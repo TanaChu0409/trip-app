@@ -80,7 +80,7 @@ class _NavigationModeScreenState extends State<NavigationModeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '前景定位示意',
+                  '第一天的地點',
                   style: TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -88,7 +88,7 @@ class _NavigationModeScreenState extends State<NavigationModeScreen> {
                 ),
                 SizedBox(height: 10),
                 Text(
-                  '這一頁會是之後 geolocator + local notifications 的主要入口。當距離下一站 500m 內時，會發送到點提醒。',
+                  '此頁列出第一天的地點。定位與到點提醒尚未開放。',
                   style: TextStyle(color: Color(0xFFD9E9FA), height: 1.5),
                 ),
               ],
@@ -106,8 +106,7 @@ class _NavigationModeScreenState extends State<NavigationModeScreen> {
                       color: AppColors.accentStrong),
                 ),
                 title: Text(stop.title),
-                subtitle: Text('${stop.timeLabel ?? '未排定'} · 預設 500m 提醒'),
-                trailing: const Icon(Icons.chevron_right_rounded),
+                subtitle: Text(stop.timeLabel ?? '未排定時間'),
               ),
             ),
             const SizedBox(height: 10),

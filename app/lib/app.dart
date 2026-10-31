@@ -12,7 +12,7 @@ class TripPlannerApp extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
-      title: '旅遊規劃APP',
+      title: '旅遊規劃 APP',
       theme: buildAppTheme(),
       scaffoldMessengerKey: appScaffoldMessengerKey,
       routerConfig: router,

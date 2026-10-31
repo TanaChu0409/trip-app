@@ -204,7 +204,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
             Text('尚無協作成員', style: TextStyle(color: Colors.grey)),
             SizedBox(height: 4),
             Text(
-              '分享邀請碼後，加入的使用者會出現在此。',
+              '使用電子郵件邀請的成員會出現在此。',
               style: TextStyle(color: Colors.grey, fontSize: 12),
             ),
           ],
@@ -274,7 +274,7 @@ class _MemberTile extends StatelessWidget {
               ),
               ButtonSegment(
                 value: TripPermission.viewer,
-                label: Text('唯讀'),
+                label: Text('僅限查看'),
               ),
             ],
             selected: {member.permission},

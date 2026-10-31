@@ -1,3 +1,4 @@
+import 'package:trip_planner_app/core/diagnostics/diagnostic_log.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -115,10 +116,10 @@ class _StopFormScreenState extends State<StopFormScreen> {
     final isReadOnly = trip.isReadOnly;
     if (isReadOnly) {
       return Scaffold(
-        appBar: AppBar(title: const Text('唯讀旅程')),
+        appBar: AppBar(title: const Text('旅程僅限查看')),
         body: Center(
           child: Text(
-            trip.isArchived ? '旅程已封存，無法編輯地點。' : '受邀唯讀旅程無法編輯地點。',
+            trip.isArchived ? '旅程已封存，無法編輯地點。' : '你目前僅限查看此旅程，無法編輯地點。',
           ),
         ),
       );
@@ -263,12 +264,17 @@ class _StopFormScreenState extends State<StopFormScreen> {
                               return;
                             }
                             showAppSnackBar(
-                              const SnackBar(content: Text('移除旅行色票失敗')),
+                              const SnackBar(content: Text('移除旅程色票失敗')),
                             );
-                          } catch (error) {
+                          } catch (error, stackTrace) {
+                            DiagnosticLog.instance
+                                .error('地點與照片處理', error, stackTrace);
                             if (!mounted) return;
                             showAppSnackBar(
-                              SnackBar(content: Text('移除旅行色票失敗：$error')),
+                              SnackBar(
+                                  content: Text(
+                                      SupabaseErrorFormatter.userMessage(
+                                          error))),
                             );
                           }
                         },
@@ -291,7 +297,7 @@ class _StopFormScreenState extends State<StopFormScreen> {
                         : null,
                     children: [
                       Text(
-                        '最多 ${StopPhotoService.maxPhotos} 張，照片上傳後自動壓縮。',
+                        '最多 ${StopPhotoService.maxPhotos} 張，儲存時會先壓縮照片再上傳。',
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
@@ -521,81 +527,84 @@ class _StopFormScreenState extends State<StopFormScreen> {
     if (formState == null || !formState.validate()) {
       return;
     }
+    return DiagnosticLog.instance.trace('儲存地點與照片', () async {
+      final originalStop = _currentStop;
 
-    final originalStop = _currentStop;
+      setState(() {
+        _isSaving = true;
+      });
 
-    setState(() {
-      _isSaving = true;
+      try {
+        final stop = StopItem(
+          id: originalStop?.id,
+          title: _titleController.text.trim(),
+          timeLabel: _cleanOptional(_timeController.text),
+          note: _cleanOptional(_noteController.text),
+          badge: _cleanOptional(_badgeController.text),
+          mapUrl: _cleanOptional(_mapUrlController.text),
+          color: _selectedColor,
+          isHighlight: _isHighlight,
+          parkingSpots: [
+            for (var index = 0; index < _parkingSpots.length; index += 1)
+              _parkingSpots[index].toParkingSpot(index),
+          ],
+          photos: List<StopPhoto>.from(_existingPhotos),
+          sortOrder: originalStop?.sortOrder ?? 0,
+        );
+
+        var successMessage = _isEditMode ? '已更新地點' : '已新增地點';
+        StopItem savedStop;
+        if (_isEditMode) {
+          savedStop = await _tripStore.updateStop(
+            tripId: widget.tripId,
+            dayId: widget.dayId,
+            stop: stop,
+          );
+        } else {
+          savedStop = await _tripStore.addStop(
+            tripId: widget.tripId,
+            dayId: widget.dayId,
+            stop: stop,
+          );
+        }
+
+        final savedStopId = savedStop.id;
+        if (savedStopId != null) {
+          successMessage = await _syncStopPhotos(
+            originalStop: originalStop,
+            savedStop: savedStop,
+          );
+        }
+
+        if (!mounted) {
+          return;
+        }
+
+        showAppSnackBar(
+          SnackBar(content: Text(successMessage)),
+        );
+        context.go('/trips/${widget.tripId}');
+      } catch (error, stackTrace) {
+        DiagnosticLog.instance.markFailed();
+        DiagnosticLog.instance.error('地點與照片處理', error, stackTrace);
+        if (await SessionExpiryHandler.signOutIfSessionExpired(error)) {
+          return;
+        }
+        if (!mounted) {
+          return;
+        }
+
+        showAppSnackBar(
+          SnackBar(content: Text(SupabaseErrorFormatter.userMessage(error))),
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isSaving = false;
+          });
+        }
+      }
     });
-
-    try {
-      final stop = StopItem(
-        id: originalStop?.id,
-        title: _titleController.text.trim(),
-        timeLabel: _cleanOptional(_timeController.text),
-        note: _cleanOptional(_noteController.text),
-        badge: _cleanOptional(_badgeController.text),
-        mapUrl: _cleanOptional(_mapUrlController.text),
-        color: _selectedColor,
-        isHighlight: _isHighlight,
-        parkingSpots: [
-          for (var index = 0; index < _parkingSpots.length; index += 1)
-            _parkingSpots[index].toParkingSpot(index),
-        ],
-        photos: List<StopPhoto>.from(_existingPhotos),
-        sortOrder: originalStop?.sortOrder ?? 0,
-      );
-
-      var successMessage = _isEditMode ? '已更新地點' : '已新增地點';
-      StopItem savedStop;
-      if (_isEditMode) {
-        savedStop = await _tripStore.updateStop(
-          tripId: widget.tripId,
-          dayId: widget.dayId,
-          stop: stop,
-        );
-      } else {
-        savedStop = await _tripStore.addStop(
-          tripId: widget.tripId,
-          dayId: widget.dayId,
-          stop: stop,
-        );
-      }
-
-      final savedStopId = savedStop.id;
-      if (savedStopId != null) {
-        successMessage = await _syncStopPhotos(
-          originalStop: originalStop,
-          savedStop: savedStop,
-        );
-      }
-
-      if (!mounted) {
-        return;
-      }
-
-      showAppSnackBar(
-        SnackBar(content: Text(successMessage)),
-      );
-      context.go('/trips/${widget.tripId}');
-    } catch (error) {
-      if (await SessionExpiryHandler.signOutIfSessionExpired(error)) {
-        return;
-      }
-      if (!mounted) {
-        return;
-      }
-
-      showAppSnackBar(
-        SnackBar(content: Text(SupabaseErrorFormatter.userMessage(error))),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
   }
 
   Future<String> _syncStopPhotos({
@@ -627,7 +636,9 @@ class _StopFormScreenState extends State<StopFormScreen> {
         );
         uploadedPhotos.add(uploadedPhoto);
       }
-    } catch (error) {
+    } catch (error, stackTrace) {
+      DiagnosticLog.instance.markFailed();
+      DiagnosticLog.instance.error('地點與照片處理', error, stackTrace);
       debugPrint(
         'Stop photo sync failed | type=${error.runtimeType} | details=${SupabaseErrorFormatter.diagnosticDetails(error)}',
       );
@@ -659,7 +670,9 @@ class _StopFormScreenState extends State<StopFormScreen> {
     for (final photo in _photosToDelete) {
       try {
         await _photoService.deletePhoto(photo);
-      } catch (error) {
+      } catch (error, stackTrace) {
+        DiagnosticLog.instance.markFailed();
+        DiagnosticLog.instance.error('地點與照片處理', error, stackTrace);
         if (await SessionExpiryHandler.signOutIfSessionExpired(error)) {
           rethrow;
         }
@@ -698,7 +711,9 @@ class _StopFormScreenState extends State<StopFormScreen> {
     for (final photo in uploadedPhotos) {
       try {
         await _photoService.deletePhoto(photo);
-      } catch (error) {
+      } catch (error, stackTrace) {
+        DiagnosticLog.instance.markFailed();
+        DiagnosticLog.instance.error('地點與照片處理', error, stackTrace);
         if (handleSessionExpiry) {
           await SessionExpiryHandler.signOutIfSessionExpired(error);
         }
@@ -710,40 +725,43 @@ class _StopFormScreenState extends State<StopFormScreen> {
     required StopItem? originalStop,
     required StopItem savedStop,
   }) async {
-    try {
-      if (_isEditMode) {
-        final originalStopId = originalStop?.id;
-        if (originalStop == null || originalStopId == null) {
+    return DiagnosticLog.instance.trace('還原地點變更', () async {
+      try {
+        if (_isEditMode) {
+          final originalStopId = originalStop?.id;
+          if (originalStop == null || originalStopId == null) {
+            return false;
+          }
+
+          await _tripStore.updateStop(
+            tripId: widget.tripId,
+            dayId: widget.dayId,
+            stop: originalStop,
+          );
+          _tripStore.updateStopPhotos(
+            tripId: widget.tripId,
+            dayId: widget.dayId,
+            stopId: originalStopId,
+            photos: originalStop.photos,
+          );
+          return true;
+        }
+
+        final savedStopId = savedStop.id;
+        if (savedStopId == null) {
           return false;
         }
 
-        await _tripStore.updateStop(
+        return _tripStore.deleteStop(
           tripId: widget.tripId,
           dayId: widget.dayId,
-          stop: originalStop,
+          stopId: savedStopId,
         );
-        _tripStore.updateStopPhotos(
-          tripId: widget.tripId,
-          dayId: widget.dayId,
-          stopId: originalStopId,
-          photos: originalStop.photos,
-        );
-        return true;
-      }
-
-      final savedStopId = savedStop.id;
-      if (savedStopId == null) {
+      } catch (error, stackTrace) {
+        DiagnosticLog.instance.error('還原失敗', error, stackTrace);
         return false;
       }
-
-      return _tripStore.deleteStop(
-        tripId: widget.tripId,
-        dayId: widget.dayId,
-        stopId: savedStopId,
-      );
-    } catch (_) {
-      return false;
-    }
+    });
   }
 
   Future<List<StopPhoto>> _fetchSyncedPhotosOrFallback({
@@ -752,7 +770,9 @@ class _StopFormScreenState extends State<StopFormScreen> {
   }) async {
     try {
       return await _photoService.fetchPhotosForStop(stopId);
-    } catch (error) {
+    } catch (error, stackTrace) {
+      DiagnosticLog.instance.markFailed();
+      DiagnosticLog.instance.error('地點與照片處理', error, stackTrace);
       if (await SessionExpiryHandler.signOutIfSessionExpired(error)) {
         rethrow;
       }

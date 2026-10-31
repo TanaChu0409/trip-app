@@ -1,3 +1,4 @@
+import 'package:trip_planner_app/core/diagnostics/diagnostic_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -62,7 +63,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          '旅遊規劃APP',
+                          '旅遊規劃 APP',
                           style: Theme.of(context).textTheme.headlineLarge,
                         ),
                       ),
@@ -90,6 +91,9 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                     ],
                   ),
                   const SizedBox(height: 24),
+                  const Align(
+                      alignment: Alignment.centerRight,
+                      child: DiagnosticButton()),
                   _HeroPanel(ownedTrips: ownedTrips),
                   const SizedBox(height: 24),
                   OutlinedButton.icon(
@@ -208,7 +212,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
             title: Text(isArchived ? '封存旅程？' : '還原旅程？'),
             content: Text(isArchived
                 ? '封存後，所有成員只能從封存頁查看「${trip.title}」，且無法編輯或使用導航。'
-                : '還原後，「${trip.title}」會重新出現在一般旅程列表並恢復提醒。'),
+                : '還原後，「${trip.title}」會重新出現在一般旅程列表。'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
@@ -268,7 +272,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('刪除旅程？'),
-            content: Text('此動作無法復原，${trip.title} 的天數、停靠點、停車資訊與提醒都會一併刪除。'),
+            content: Text('此動作無法復原，${trip.title} 的天數、地點、停車資訊都會一併刪除。'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
@@ -305,7 +309,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('退出分享旅程？'),
-            content: Text('退出後，${trip.title} 會從「分享給我的」列表移除，相關提醒也會一起清除。'),
+            content: Text('退出後，${trip.title} 會從「分享給我的」列表移除。'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
@@ -376,7 +380,7 @@ class _CreateTripSheetState extends State<_CreateTripSheet> {
             children: [
               Text('新增旅程', style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),
-              const Text('建立後會直接寫入 Supabase，並同步建立對應天數。'),
+              const Text('依起訖日期建立每日行程，之後可新增地點。'),
               const SizedBox(height: 18),
               TextFormField(
                 controller: _titleController,
@@ -566,7 +570,7 @@ class _HeroPanel extends StatelessWidget {
             runSpacing: 12,
             children: [
               _SummaryCard(value: '${ownedTrips.length}', label: '我的旅程'),
-              _SummaryCard(value: '$totalStops', label: '已整理停靠點'),
+              _SummaryCard(value: '$totalStops', label: '已整理地點'),
             ],
           ),
         ],

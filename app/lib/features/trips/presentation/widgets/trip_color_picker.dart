@@ -86,7 +86,7 @@ class TripColorPicker extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('移除旅行色票？'),
+        title: const Text('移除旅程色票？'),
         content: Text('$color 將不再供這趟旅行的新地點選用；已使用此顏色的地點不會改變。'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('取消')),

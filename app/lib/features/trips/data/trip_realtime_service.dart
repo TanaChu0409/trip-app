@@ -1,3 +1,4 @@
+import 'package:trip_planner_app/core/diagnostics/diagnostic_log.dart';
 import 'dart:async';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -51,6 +52,12 @@ class TripRealtimeService {
           schema: 'public',
           table: 'trips',
           callback: (payload) {
+            DiagnosticLog.instance.event(DiagnosticKind.realtime, '收到資料異動',
+                outcome: DiagnosticOutcome.success,
+                data: {
+                  'trip_id': payload.newRecord['id'],
+                  'is_archived': payload.newRecord['is_archived'],
+                });
             final row = payload.newRecord;
             final tripId = row['id'] as String?;
             final isArchived = row['is_archived'] as bool?;
@@ -69,6 +76,12 @@ class TripRealtimeService {
             value: userId,
           ),
           callback: (payload) {
+            DiagnosticLog.instance.event(DiagnosticKind.realtime, '成員權限異動',
+                outcome: DiagnosticOutcome.success,
+                data: {
+                  'trip_id': payload.newRecord['trip_id'],
+                  'permission': payload.newRecord['permission'],
+                });
             final newRow = payload.newRecord;
             final tripId = newRow['trip_id'] as String?;
             final permissionStr = newRow['permission'] as String?;
@@ -90,6 +103,9 @@ class TripRealtimeService {
             value: userId,
           ),
           callback: (payload) {
+            DiagnosticLog.instance.event(DiagnosticKind.realtime, '成員存取權移除',
+                outcome: DiagnosticOutcome.success,
+                data: {'trip_id': payload.oldRecord['trip_id']});
             final oldRow = payload.oldRecord;
             final tripId = oldRow['trip_id'] as String?;
             if (tripId != null) {
@@ -98,6 +114,12 @@ class TripRealtimeService {
           },
         )
         .subscribe((status, error) {
+      DiagnosticLog.instance.event(
+          DiagnosticKind.realtime, '即時連線：${status.name}',
+          outcome: status == RealtimeSubscribeStatus.subscribed
+              ? DiagnosticOutcome.success
+              : DiagnosticOutcome.failure,
+          error: error);
       if (subscribed.isCompleted) return;
       if (status == RealtimeSubscribeStatus.subscribed) {
         subscribed.complete();
@@ -117,6 +139,10 @@ class TripRealtimeService {
   }
 
   Future<void> unsubscribe() async {
+    if (_channel != null) {
+      DiagnosticLog.instance.event(DiagnosticKind.realtime, '結束即時連線',
+          outcome: DiagnosticOutcome.success);
+    }
     if (_channel != null) {
       await Supabase.instance.client.removeChannel(_channel!);
       _channel = null;

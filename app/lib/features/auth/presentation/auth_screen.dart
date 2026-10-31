@@ -1,3 +1,4 @@
+import 'package:trip_planner_app/core/diagnostics/diagnostic_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:trip_planner_app/core/supabase/supabase_error_formatter.dart';
@@ -59,9 +60,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('旅遊規劃APP', style: theme.textTheme.headlineLarge),
+                        Text('旅遊規劃 APP', style: theme.textTheme.headlineLarge),
                         const SizedBox(height: 12),
                         const Text('請使用 Google 帳號登入。'),
+                        const DiagnosticButton(),
                         if (_errorMessage != null) ...[
                           const SizedBox(height: 14),
                           Text(
@@ -89,7 +91,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                   size: 22),
                           label: const Text('以 Google 帳號登入'),
                         ),
-
                       ],
                     ),
                   ),

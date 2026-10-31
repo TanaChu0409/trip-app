@@ -14,7 +14,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('旅遊規劃APP'), findsOneWidget);
+    expect(find.text('旅遊規劃 APP'), findsOneWidget);
     expect(find.text('新增旅程'), findsOneWidget);
   });
 }

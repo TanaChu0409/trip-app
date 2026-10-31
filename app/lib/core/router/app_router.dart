@@ -1,3 +1,5 @@
+import 'package:trip_planner_app/core/diagnostics/diagnostic_observer.dart';
+import 'package:trip_planner_app/core/diagnostics/diagnostic_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:trip_planner_app/features/auth/presentation/auth_screen.dart';
@@ -14,10 +16,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     initialLocation: '/trips',
+    observers: [DiagnosticObserver()],
     refreshListenable: authStateListenable,
     redirect: (context, state) {
       final isAuthenticated = authStateListenable.isAuthenticated;
       final isAuthRoute = state.matchedLocation == '/auth';
+      if (state.matchedLocation == '/diagnostics') return null;
 
       if (!isAuthenticated && !isAuthRoute) {
         return '/auth';
@@ -30,6 +34,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(
+          path: '/diagnostics',
+          builder: (context, state) => const DiagnosticScreen()),
       GoRoute(
         path: '/auth',
         builder: (context, state) => const AuthScreen(),

@@ -1,3 +1,4 @@
+import 'package:trip_planner_app/core/diagnostics/diagnostic_log.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseSessionGuard {
@@ -17,7 +18,8 @@ class SupabaseSessionGuard {
 
     try {
       await auth.refreshSession();
-    } catch (_) {
+    } catch (error, stackTrace) {
+      DiagnosticLog.instance.error('背景處理', error, stackTrace);
       return false;
     }
 

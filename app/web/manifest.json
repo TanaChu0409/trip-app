@@ -5,7 +5,7 @@
     "display": "standalone",
     "background_color": "#003D79",
     "theme_color": "#003D79",
-    "description": "桃園到嘉義行程共用與規劃工具。",
+    "description": "建立旅程、安排每日地點，與同行成員共同規劃。",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
