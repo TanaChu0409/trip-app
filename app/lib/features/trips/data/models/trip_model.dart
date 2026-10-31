@@ -343,6 +343,7 @@ class TripSummary {
     this.sharedFromTripId,
     this.color,
     this.customStopColors = const [],
+    this.customColorNames = const {},
     this.permission,
     this.isArchived = false,
   });
@@ -356,6 +357,7 @@ class TripSummary {
   final String? sharedFromTripId;
   final String? color;
   final List<String> customStopColors;
+  final Map<String, String> customColorNames;
 
   /// Permission for guests. `null` when [role] is [TripRole.owner].
   final TripPermission? permission;
@@ -379,6 +381,7 @@ class TripSummary {
     String? sharedFromTripId,
     String? color,
     List<String>? customStopColors,
+    Map<String, String>? customColorNames,
     TripPermission? permission,
     bool? isArchived,
   }) {
@@ -392,6 +395,7 @@ class TripSummary {
       sharedFromTripId: sharedFromTripId ?? this.sharedFromTripId,
       color: color ?? this.color,
       customStopColors: customStopColors ?? this.customStopColors,
+      customColorNames: customColorNames ?? this.customColorNames,
       permission: permission ?? this.permission,
       isArchived: isArchived ?? this.isArchived,
     );
@@ -412,6 +416,7 @@ class TripSummary {
       'shared_from_trip_id': sharedFromTripId,
       'color': color,
       'custom_stop_colors': customStopColors,
+      'custom_color_names': customColorNames,
       'permission': permission?.name,
       'is_archived': isArchived,
     };
@@ -436,6 +441,7 @@ class TripSummary {
       sharedFromTripId: json['shared_from_trip_id'] as String?,
       color: json['color'] as String?,
       customStopColors: _stringList(json['custom_stop_colors']),
+      customColorNames: parseCustomColorNames(json['custom_color_names']),
       permission: _tripPermissionFromCache(json['permission'] as String?),
       isArchived: json['is_archived'] as bool? ?? false,
     );
@@ -557,3 +563,12 @@ TripPermission? _tripPermissionFromCache(String? value) {
       return null;
   }
 }
+
+/// Missing name metadata in older snapshots is valid.
+Map<String, String> parseCustomColorNames(Object? value) => value is Map
+    ? {
+        for (final entry in value.entries)
+          if (entry.key is String && entry.value is String)
+            (entry.key as String).toUpperCase(): entry.value as String
+      }
+    : const {};

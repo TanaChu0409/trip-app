@@ -14,6 +14,8 @@ class TripColorPicker extends StatelessWidget {
     this.defaultLabel = '使用旅程顏色',
     this.savedCustomColors = const [],
     this.onRemoveSavedCustomColor,
+    this.customColorNames = const {},
+    this.onColorNamed,
   });
 
   final String? selectedColor;
@@ -23,12 +25,14 @@ class TripColorPicker extends StatelessWidget {
   final bool showDefaultOption;
   final String defaultLabel;
   final List<String> savedCustomColors;
+  final Map<String, String> customColorNames;
+  final void Function(String color, String name)? onColorNamed;
   final Future<void> Function(String color)? onRemoveSavedCustomColor;
 
   @override
   Widget build(BuildContext context) {
-    final selectedHex = selectedColor ??
-        (showDefaultOption ? null : TripColors.defaultHex);
+    final selectedHex =
+        selectedColor ?? (showDefaultOption ? null : TripColors.defaultHex);
     final isCustom = selectedColor != null &&
         !TripColors.presets.any((p) => p.hex == selectedColor) &&
         !savedCustomColors.contains(selectedColor);
@@ -65,6 +69,10 @@ class TripColorPicker extends StatelessWidget {
             for (final color in savedCustomColors)
               _SavedCustomColorOption(
                 color: color,
+                name: customColorNames[color],
+                onRename: onColorNamed == null
+                    ? null
+                    : () => _showColorPickerDialog(context, renameColor: color),
                 isSelected: color == selectedColor,
                 onTap: () => onColorChanged(color),
                 onRemove: onRemoveSavedCustomColor == null
@@ -75,35 +83,64 @@ class TripColorPicker extends StatelessWidget {
               isSelected: isCustom,
               customColor: isCustom ? colorFromHex(selectedColor) : null,
               onTap: () => _showColorPickerDialog(context),
+              name: isCustom ? customColorNames[selectedColor] : null,
             ),
           ],
         ),
+        if (isCustom && onColorNamed != null)
+          TextButton.icon(
+            onPressed: () =>
+                _showColorPickerDialog(context, renameColor: selectedColor),
+            icon: const Icon(Icons.edit_outlined, size: 16),
+            label: const Text('修改名稱'),
+          ),
       ],
     );
   }
 
-  Future<void> _confirmRemoveSavedColor(BuildContext context, String color) async {
+  Future<void> _confirmRemoveSavedColor(
+      BuildContext context, String color) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('移除旅程色票？'),
-        content: Text('$color 將不再供這趟旅行的新地點選用；已使用此顏色的地點不會改變。'),
+        content: Text(
+            '${customColorNames[color] ?? color}（$color）將不再供這趟旅行的新地點選用；已使用此顏色的地點不會改變。'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('移除')),
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('移除')),
         ],
       ),
     );
     if (confirmed == true) await onRemoveSavedCustomColor?.call(color);
   }
 
-  Future<void> _showColorPickerDialog(BuildContext context) async {
-    final initialColor =
-        colorFromHex(selectedColor, fallback: TripColors.presets.first.color);
+  Future<void> _showColorPickerDialog(BuildContext context,
+      {String? renameColor}) async {
+    final initialColor = colorFromHex(renameColor ?? selectedColor,
+        fallback: TripColors.presets.first.color);
     final hexController = TextEditingController(
       text: hexFromColor(initialColor).replaceFirst('#', ''),
     );
+    final nameController = TextEditingController(
+      text: customColorNames[hexFromColor(initialColor)] ?? '',
+    );
     Color pickedColor = initialColor;
+    String? nameError;
+    String currentHex = hexFromColor(initialColor);
+    void syncName(Color color) {
+      final hex = hexFromColor(color);
+      if (hex != currentHex) {
+        nameController.text = customColorNames[hex] ?? '';
+        currentHex = hex;
+        nameError = null;
+      }
+    }
+
     String? hexError;
     bool isUpdatingHexFromPicker = false;
 
@@ -133,64 +170,82 @@ class TripColorPicker extends StatelessWidget {
     }
 
     try {
-      final dialogResult = await showDialog<_ColorPickerResult>(
+      final route = DialogRoute<_ColorPickerResult>(
         context: context,
         builder: (dialogContext) {
           return StatefulBuilder(
             builder: (context, setDialogState) {
               return AlertDialog(
-                title: const Text('選擇自訂顏色'),
+                title: Text(renameColor == null ? '選擇自訂顏色' : '修改名稱'),
                 contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 content: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      fcp.ColorPicker(
-                        pickerColor: pickedColor,
-                        onColorChanged: (color) {
-                          syncHexController(color);
-                          setDialogState(() {
-                            pickedColor = color;
-                            hexError = null;
-                          });
-                        },
-                        colorPickerWidth: 280,
-                        pickerAreaHeightPercent: 0.7,
-                        enableAlpha: false,
-                        labelTypes: const [],
-                        displayThumbColor: true,
-                        paletteType: fcp.PaletteType.hsvWithHue,
-                      ),
+                      if (renameColor == null)
+                        fcp.ColorPicker(
+                          pickerColor: pickedColor,
+                          onColorChanged: (color) {
+                            syncHexController(color);
+                            syncName(color);
+                            setDialogState(() {
+                              pickedColor = color;
+                              hexError = null;
+                            });
+                          },
+                          colorPickerWidth: 280,
+                          pickerAreaHeightPercent: 0.7,
+                          enableAlpha: false,
+                          labelTypes: const [],
+                          displayThumbColor: true,
+                          paletteType: fcp.PaletteType.hsvWithHue,
+                        ),
+                      const SizedBox(height: 12),
+                      if (renameColor == null)
+                        TextField(
+                          controller: hexController,
+                          decoration: InputDecoration(
+                            prefixText: '#',
+                            labelText: '輸入色碼',
+                            hintText: 'RRGGBB',
+                            errorText: hexError,
+                            counterText: '',
+                          ),
+                          maxLength: 6,
+                          maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                          textCapitalization: TextCapitalization.characters,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[0-9A-Fa-f]'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (isUpdatingHexFromPicker) {
+                              return;
+                            }
+
+                            setDialogState(() {
+                              if (value.length == 6) {
+                                pickedColor = colorFromHex('#$value');
+                                syncName(pickedColor);
+                              }
+                              hexError = null;
+                            });
+                          },
+                        ),
                       const SizedBox(height: 12),
                       TextField(
-                        controller: hexController,
+                        key: const ValueKey('custom-color-name'),
+                        controller: nameController,
                         decoration: InputDecoration(
-                          prefixText: '#',
-                          labelText: '輸入色碼',
-                          hintText: 'RRGGBB',
-                          errorText: hexError,
-                          counterText: '',
+                          labelText: '顏色名稱',
+                          hintText: '例如 海洋藍',
+                          errorText: nameError,
                         ),
-                        maxLength: 6,
+                        maxLength: 20,
                         maxLengthEnforcement: MaxLengthEnforcement.enforced,
-                        textCapitalization: TextCapitalization.characters,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                            RegExp(r'[0-9A-Fa-f]'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          if (isUpdatingHexFromPicker) {
-                            return;
-                          }
-
-                          setDialogState(() {
-                            if (value.length == 6) {
-                              pickedColor = colorFromHex('#$value');
-                            }
-                            hexError = null;
-                          });
-                        },
+                        onChanged: (_) =>
+                            setDialogState(() => nameError = null),
                       ),
                       const SizedBox(height: 8),
                     ],
@@ -210,8 +265,19 @@ class TripColorPicker extends StatelessWidget {
                         );
                         return;
                       }
+                      final name = nameController.text.trim();
+                      final isPreset = TripColors.presets
+                          .any((p) => p.hex == hexFromColor(pickedColor));
+                      if (!isPreset && name.isEmpty) {
+                        setDialogState(() => nameError = '請輸入顏色名稱');
+                        return;
+                      }
+                      if (!isPreset && name.runes.length > 20) {
+                        setDialogState(() => nameError = '顏色名稱最多 20 字');
+                        return;
+                      }
                       Navigator.of(dialogContext).pop(
-                        _ColorPickerResult(color: pickedColor),
+                        _ColorPickerResult(color: pickedColor, name: name),
                       );
                     },
                     child: const Text('確認'),
@@ -223,11 +289,20 @@ class TripColorPicker extends StatelessWidget {
         },
       );
 
+      final dialogResult = await Navigator.of(context).push(route);
+      await route.completed;
+      if (!context.mounted) return;
       if (dialogResult != null) {
-        onColorChanged(hexFromColor(dialogResult.color));
+        final hex = hexFromColor(dialogResult.color);
+        if (!TripColors.presets.any((p) => p.hex == hex) &&
+            customColorNames[hex] != dialogResult.name) {
+          onColorNamed?.call(hex, dialogResult.name);
+        }
+        if (renameColor == null) onColorChanged(hex);
       }
     } finally {
       hexController.dispose();
+      nameController.dispose();
     }
   }
 }
@@ -238,12 +313,16 @@ class _SavedCustomColorOption extends StatelessWidget {
     required this.isSelected,
     required this.onTap,
     this.onRemove,
+    this.name,
+    this.onRename,
   });
 
   final String color;
   final bool isSelected;
   final VoidCallback onTap;
   final VoidCallback? onRemove;
+  final String? name;
+  final VoidCallback? onRename;
 
   @override
   Widget build(BuildContext context) {
@@ -268,14 +347,22 @@ class _SavedCustomColorOption extends StatelessWidget {
                     child: const CircleAvatar(
                       radius: 10,
                       backgroundColor: AppColors.text,
-                      child: Icon(Icons.close_rounded, size: 13, color: Colors.white),
+                      child: Icon(Icons.close_rounded,
+                          size: 13, color: Colors.white),
                     ),
                   ),
                 ),
             ],
           ),
           const SizedBox(height: 6),
-          Text(color, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500)),
+          _ColorLabel(name: name ?? color, hex: color, isSelected: isSelected),
+          if (onRename != null)
+            IconButton(
+              tooltip: '修改名稱',
+              onPressed: onRename,
+              icon: const Icon(Icons.edit_outlined, size: 16),
+              visualDensity: VisualDensity.compact,
+            ),
         ],
       ),
     );
@@ -294,16 +381,26 @@ class _ColorCircle extends StatelessWidget {
         decoration: BoxDecoration(
           color: color,
           shape: BoxShape.circle,
-          border: Border.all(color: isSelected ? AppColors.text : Colors.white, width: isSelected ? 3 : 1),
-          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.28), blurRadius: isSelected ? 14 : 8, offset: const Offset(0, 4))],
+          border: Border.all(
+              color: isSelected ? AppColors.text : Colors.white,
+              width: isSelected ? 3 : 1),
+          boxShadow: [
+            BoxShadow(
+                color: color.withValues(alpha: 0.28),
+                blurRadius: isSelected ? 14 : 8,
+                offset: const Offset(0, 4))
+          ],
         ),
-        child: isSelected ? Icon(Icons.check_rounded, color: onAccentColor(color)) : null,
+        child: isSelected
+            ? Icon(Icons.check_rounded, color: onAccentColor(color))
+            : null,
       );
 }
 
 class _ColorPickerResult {
-  const _ColorPickerResult({required this.color});
+  const _ColorPickerResult({required this.color, required this.name});
   final Color color;
+  final String name;
 }
 
 class _DefaultColorOption extends StatelessWidget {
@@ -427,11 +524,13 @@ class _CustomColorOption extends StatelessWidget {
     required this.isSelected,
     required this.onTap,
     this.customColor,
+    this.name,
   });
 
   final bool isSelected;
   final VoidCallback onTap;
   final Color? customColor;
+  final String? name;
 
   @override
   Widget build(BuildContext context) {
@@ -478,15 +577,33 @@ class _CustomColorOption extends StatelessWidget {
                   ),
           ),
           const SizedBox(height: 6),
-          Text(
-            '自訂顏色',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.text,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                ),
-          ),
+          _ColorLabel(
+              name: name ?? (hasCustom ? hexFromColor(displayColor) : '自訂顏色'),
+              hex: hasCustom ? hexFromColor(displayColor) : '',
+              isSelected: isSelected),
         ],
       ),
     );
   }
+}
+
+class _ColorLabel extends StatelessWidget {
+  const _ColorLabel(
+      {required this.name, required this.hex, required this.isSelected});
+  final String name;
+  final String hex;
+  final bool isSelected;
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: hex.isEmpty ? name : '$name（$hex）',
+        child: SizedBox(
+          width: 80,
+          child: Text(name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500)),
+        ),
+      );
 }
