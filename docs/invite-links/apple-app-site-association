@@ -1,0 +1,10 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["REPLACE_WITH_APPLE_TEAM_ID.com.example.tripPlannerApp"],
+        "components": [{"/": "/trip-app/", "?": {"invite": "*"}}]
+      }
+    ]
+  }
+}

@@ -15,7 +15,8 @@ with relations(object_name, object_kind) as (
     ('public.profiles', 'profiles'),
     ('public.profiles_public', 'profiles_public'),
     ('public.join_code_attempts', 'attempts'),
-    ('public.invite_member_attempts', 'attempts')
+    ('public.invite_member_attempts', 'attempts'),
+    ('public.trip_invite_links', 'attempts')
 ), roles(role_name) as (
   values ('anon'), ('authenticated'), ('service_role')
 ), privileges(privilege_name) as (
@@ -108,7 +109,14 @@ from expected;
 -- Validate the EXECUTE allowlist for all application functions in public.
 with functions(signature, access_class) as (
   values
-    ('public.join_trip_by_code(text)', 'app_rpc'),
+    ('public.join_trip_by_code(text)', 'internal'),
+    ('public.get_trip_invite_link(uuid)', 'app_rpc'),
+    ('public.create_trip_invite_link(uuid,text)', 'app_rpc'),
+    ('public.revoke_trip_invite_link(uuid)', 'app_rpc'),
+    ('public.preview_trip_invite_link(text)', 'app_rpc'),
+    ('public.accept_trip_invite_link(text)', 'app_rpc'),
+    ('public.resolve_trip_invite_link(text,boolean)', 'internal'),
+    ('public.revoke_invite_on_archive()', 'internal'),
     ('public.invite_member_by_email(uuid,text,text)', 'app_rpc'),
     ('public.update_trip_color(uuid,text)', 'app_rpc'),
     ('public.remove_trip_custom_stop_color(uuid,text)', 'app_rpc'),

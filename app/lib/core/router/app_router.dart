@@ -1,10 +1,12 @@
 import 'package:trip_planner_app/core/diagnostics/diagnostic_observer.dart';
 import 'package:trip_planner_app/core/diagnostics/diagnostic_screen.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/foundation.dart';
+import 'package:trip_planner_app/core/router/invite_link_controller.dart';
+import 'package:trip_planner_app/features/trips/presentation/invite_accept_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:trip_planner_app/features/auth/presentation/auth_screen.dart';
 import 'package:trip_planner_app/features/auth/data/auth_provider.dart';
-import 'package:trip_planner_app/features/notifications/presentation/navigation_mode_screen.dart';
 import 'package:trip_planner_app/features/trip_detail/presentation/member_management_screen.dart';
 import 'package:trip_planner_app/features/trip_detail/presentation/stop_form_screen.dart';
 import 'package:trip_planner_app/features/trip_detail/presentation/trip_detail_screen.dart';
@@ -13,30 +15,25 @@ import 'package:trip_planner_app/features/trips/presentation/archived_trips_scre
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authStateListenable = ref.watch(authStateListenableProvider);
+  final invites = ref.watch(inviteLinkControllerProvider);
 
-  return GoRouter(
+  final router = GoRouter(
     initialLocation: '/trips',
     observers: [DiagnosticObserver()],
-    refreshListenable: authStateListenable,
+    refreshListenable: Listenable.merge([authStateListenable, invites]),
     redirect: (context, state) {
-      final isAuthenticated = authStateListenable.isAuthenticated;
-      final isAuthRoute = state.matchedLocation == '/auth';
       if (state.matchedLocation == '/diagnostics') return null;
-
-      if (!isAuthenticated && !isAuthRoute) {
-        return '/auth';
-      }
-
-      if (isAuthenticated && isAuthRoute) {
-        return '/trips';
-      }
-
-      return null;
+      return invites.redirect(state.matchedLocation,
+          authenticated: authStateListenable.isAuthenticated);
     },
     routes: [
       GoRoute(
           path: '/diagnostics',
           builder: (context, state) => const DiagnosticScreen()),
+      GoRoute(
+          path: '/invite/:token',
+          builder: (context, state) =>
+              InviteAcceptScreen(token: state.pathParameters['token']!)),
       GoRoute(
         path: '/auth',
         builder: (context, state) => const AuthScreen(),
@@ -90,13 +87,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 },
               ),
               GoRoute(
-                path: 'navigation',
-                builder: (context, state) {
-                  final tripId = state.pathParameters['tripId']!;
-                  return NavigationModeScreen(tripId: tripId);
-                },
-              ),
-              GoRoute(
                 path: 'members',
                 builder: (context, state) {
                   final tripId = state.pathParameters['tripId']!;
@@ -109,4 +99,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+  ref.onDispose(router.dispose);
+  return router;
 });

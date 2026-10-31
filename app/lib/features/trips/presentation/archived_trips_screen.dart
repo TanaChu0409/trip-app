@@ -52,7 +52,7 @@ class _ArchivedTripsScreenState extends State<ArchivedTripsScreen> {
                             style: Theme.of(context).textTheme.headlineMedium)),
                   ]),
                   const SizedBox(height: 8),
-                  const Text('封存旅程可完整瀏覽，但不能編輯、邀請成員或使用導航。'),
+                  const Text('封存旅程可完整瀏覽，但不能編輯或邀請成員。'),
                   const SizedBox(height: 24),
                   if (_tripStore.isLoadingArchived && trips.isEmpty)
                     const Center(child: CircularProgressIndicator())

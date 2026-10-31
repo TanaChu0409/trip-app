@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:trip_planner_app/features/trip_detail/presentation/initial_day_tab_index.dart';
+import 'package:trip_planner_app/features/trip_detail/presentation/widgets/invite_link_panel.dart';
 import 'package:go_router/go_router.dart';
 import 'package:trip_planner_app/core/supabase/supabase_error_formatter.dart';
 import 'package:trip_planner_app/core/theme/app_theme.dart';
@@ -13,10 +15,14 @@ class TripDetailScreen extends StatefulWidget {
     super.key,
     required this.tripId,
     this.loadArchivedTrip = false,
+    this.tripStore,
   });
 
   final String tripId;
   final bool loadArchivedTrip;
+
+  /// Optional store override for isolated widget tests.
+  final TripStore? tripStore;
 
   @override
   State<TripDetailScreen> createState() => _TripDetailScreenState();
@@ -27,7 +33,8 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   static const double _tabBarHeaderHeight = 56;
 
   late TabController _tabController;
-  final TripStore _tripStore = TripStore.instance;
+  late TripStore _tripStore;
+  bool _hasSelectedInitialDay = false;
   bool _hideFloatingActionButton = false;
 
   // Cached trip reference – rebuilt only when this specific trip changes.
@@ -38,15 +45,49 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   @override
   void initState() {
     super.initState();
+    _tripStore = widget.tripStore ?? TripStore.instance;
     _currentTrip = _tripStore.findById(widget.tripId);
     _isStoreLoading = _isRelevantStoreLoading;
     _storeLoadError = _relevantLoadError;
     final initialDayCount = _currentTrip == null || _currentTrip!.days.isEmpty
         ? 1
         : _currentTrip!.days.length;
-    _tabController = TabController(length: initialDayCount, vsync: this);
+    _hasSelectedInitialDay = _currentTrip?.days.isNotEmpty ?? false;
+    _tabController = TabController(
+      length: initialDayCount,
+      vsync: this,
+      initialIndex:
+          initialDayTabIndex(_currentTrip?.days ?? [], DateTime.now()),
+    );
     _tabController.addListener(_handleTabChanged);
     _tripStore.addListener(_handleStoreChanged);
+    if (widget.loadArchivedTrip) {
+      _tripStore.ensureArchivedTripsLoaded();
+    } else {
+      _tripStore.ensureLoaded();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant TripDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextStore = widget.tripStore ?? TripStore.instance;
+    final storeChanged = !identical(_tripStore, nextStore);
+    if (oldWidget.tripId == widget.tripId &&
+        oldWidget.loadArchivedTrip == widget.loadArchivedTrip &&
+        !storeChanged) {
+      return;
+    }
+    if (storeChanged) {
+      _tripStore.removeListener(_handleStoreChanged);
+      _tripStore = nextStore;
+      _tripStore.addListener(_handleStoreChanged);
+    }
+    _hasSelectedInitialDay = false;
+    _currentTrip = _tripStore.findById(widget.tripId);
+    _isStoreLoading = _isRelevantStoreLoading;
+    _storeLoadError = _relevantLoadError;
+    _syncTabController(_currentTrip?.days ?? []);
     if (widget.loadArchivedTrip) {
       _tripStore.ensureArchivedTripsLoaded();
     } else {
@@ -80,7 +121,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
       _isStoreLoading = newLoading;
       _storeLoadError = newError;
       if (newTrip != null) {
-        _syncTabController(newTrip.days.isEmpty ? 1 : newTrip.days.length);
+        _syncTabController(newTrip.days);
       }
     });
   }
@@ -93,13 +134,19 @@ class _TripDetailScreenState extends State<TripDetailScreen>
       ? _tripStore.archivedLoadError
       : _tripStore.loadError;
 
-  void _syncTabController(int nextLength) {
+  void _syncTabController(List<TripDay> days) {
+    final nextLength = days.isEmpty ? 1 : days.length;
+    final shouldSelectInitialDay = !_hasSelectedInitialDay && days.isNotEmpty;
+    final nextIndex = shouldSelectInitialDay
+        ? initialDayTabIndex(days, DateTime.now())
+        : _tabController.index.clamp(0, nextLength - 1);
+    if (shouldSelectInitialDay) _hasSelectedInitialDay = true;
     if (_tabController.length == nextLength) {
+      if (shouldSelectInitialDay) _tabController.index = nextIndex;
       return;
     }
 
     final previousController = _tabController;
-    final nextIndex = previousController.index.clamp(0, nextLength - 1);
     previousController.removeListener(_handleTabChanged);
     _tabController = TabController(
       length: nextLength,
@@ -217,8 +264,6 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                       tripColor: tripColor,
                       onInviteMember: () =>
                           _showInviteMemberSheet(context, trip),
-                      onOpenNavigation: () =>
-                          context.go('/trips/${trip.id}/navigation'),
                     ),
                   ],
                 ),
@@ -310,7 +355,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
           builder: (context) => AlertDialog(
             title: Text(isArchived ? '封存旅程？' : '還原旅程？'),
             content: Text(isArchived
-                ? '封存後，所有成員只能從封存頁查看此旅程，且無法編輯或使用導航。'
+                ? '封存後，所有成員只能從封存頁查看此旅程，且無法編輯。'
                 : '還原後，旅程會重新出現在一般列表。'),
             actions: [
               TextButton(
@@ -660,13 +705,11 @@ class _TripSummaryCard extends StatelessWidget {
     required this.trip,
     required this.tripColor,
     required this.onInviteMember,
-    required this.onOpenNavigation,
   });
 
   final TripSummary trip;
   final Color tripColor;
   final VoidCallback onInviteMember;
-  final VoidCallback onOpenNavigation;
 
   @override
   Widget build(BuildContext context) {
@@ -708,12 +751,12 @@ class _TripSummaryCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               trip.isArchived
-                  ? '此旅程已封存，僅供瀏覽；編輯、邀請與導航均無法使用。'
+                  ? '此旅程已封存，僅供瀏覽；編輯與邀請均已暫停。'
                   : switch (trip.role) {
                       TripRole.owner => '你是旅程擁有者，可新增、編輯、刪除與排序地點。',
                       TripRole.guest => trip.permission == TripPermission.editor
                           ? '協作模式，可新增、編輯、刪除行程地點與更改顏色。'
-                          : '你目前僅限查看此旅程，可瀏覽地點與開啟地圖。',
+                          : '你目前僅限查看此旅程，可瀏覽行程與地點資訊。',
                     },
             ),
             if (!trip.isArchived && trip.role == TripRole.owner) ...[
@@ -733,14 +776,6 @@ class _TripSummaryCard extends StatelessWidget {
                 _MiniStat(value: '${trip.stopCount}', label: '地點'),
               ],
             ),
-            if (!trip.isArchived) ...[
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: onOpenNavigation,
-                icon: const Icon(Icons.navigation_outlined),
-                label: const Text('開啟導航模式'),
-              ),
-            ],
           ],
         ),
       ),
@@ -824,6 +859,8 @@ class _InviteMemberSheet extends StatefulWidget {
 }
 
 class _InviteMemberSheetState extends State<_InviteMemberSheet> {
+  bool _linkMode = false;
+  bool _hasOpenedLinks = false;
   final TextEditingController _emailController = TextEditingController();
   TripPermission _selectedPermission = TripPermission.editor;
   bool _isSubmitting = false;
@@ -845,72 +882,95 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
           color: Color(0xFFF6FAFF),
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        child: Column(
+        child: SingleChildScrollView(
+            child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('邀請成員', style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            const Text('輸入對方的 Email 地址邀請加入行程。'),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.info_outline_rounded,
-                    size: 16, color: Colors.orange.shade700),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    '提醒：對方須先登入本應用程式以建立帳號',
-                    style:
-                        TextStyle(fontSize: 13, color: Colors.orange.shade800),
+            const SizedBox(height: 12),
+            SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(value: false, label: Text('Email')),
+                  ButtonSegment(value: true, label: Text('分享連結'))
+                ],
+                selected: {
+                  _linkMode
+                },
+                onSelectionChanged: _isSubmitting
+                    ? null
+                    : (values) => setState(() {
+                          _linkMode = values.first;
+                          _hasOpenedLinks |= _linkMode;
+                        })),
+            if (_hasOpenedLinks)
+              Visibility(
+                  visible: _linkMode,
+                  maintainState: true,
+                  child: InviteLinkPanel(tripId: widget.tripId)),
+            if (!_linkMode) ...[
+              const SizedBox(height: 8),
+              const Text('輸入對方的 Email 地址邀請加入行程。'),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.info_outline_rounded,
+                      size: 16, color: Colors.orange.shade700),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '提醒：對方須先登入本應用程式以建立帳號',
+                      style: TextStyle(
+                          fontSize: 13, color: Colors.orange.shade800),
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              autocorrect: false,
-              decoration: const InputDecoration(
-                labelText: '對方的 Email',
-                hintText: '例如 someone@example.com',
-                prefixIcon: Icon(Icons.email_outlined),
+                ],
               ),
-              onSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 16),
-            Text('權限', style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(height: 8),
-            SegmentedButton<TripPermission>(
-              segments: const [
-                ButtonSegment(
-                  value: TripPermission.editor,
-                  label: Text('可編輯'),
-                  icon: Icon(Icons.edit_outlined),
+              const SizedBox(height: 18),
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                autocorrect: false,
+                decoration: const InputDecoration(
+                  labelText: '對方的 Email',
+                  hintText: '例如 someone@example.com',
+                  prefixIcon: Icon(Icons.email_outlined),
                 ),
-                ButtonSegment(
-                  value: TripPermission.viewer,
-                  label: Text('僅限查看'),
-                  icon: Icon(Icons.visibility_outlined),
-                ),
-              ],
-              selected: {_selectedPermission},
-              onSelectionChanged: (selection) {
-                if (selection.isNotEmpty) {
-                  setState(() => _selectedPermission = selection.first);
-                }
-              },
-            ),
-            const SizedBox(height: 20),
-            FilledButton(
-              onPressed: _isSubmitting ? null : _submit,
-              style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50)),
-              child: Text(_isSubmitting ? '邀請中...' : '傳送邀請'),
-            ),
+                onSubmitted: (_) => _submit(),
+              ),
+              const SizedBox(height: 16),
+              Text('權限', style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 8),
+              SegmentedButton<TripPermission>(
+                segments: const [
+                  ButtonSegment(
+                    value: TripPermission.editor,
+                    label: Text('可編輯'),
+                    icon: Icon(Icons.edit_outlined),
+                  ),
+                  ButtonSegment(
+                    value: TripPermission.viewer,
+                    label: Text('僅限查看'),
+                    icon: Icon(Icons.visibility_outlined),
+                  ),
+                ],
+                selected: {_selectedPermission},
+                onSelectionChanged: (selection) {
+                  if (selection.isNotEmpty) {
+                    setState(() => _selectedPermission = selection.first);
+                  }
+                },
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: _isSubmitting ? null : _submit,
+                style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50)),
+                child: Text(_isSubmitting ? '邀請中...' : '傳送邀請'),
+              ),
+            ],
           ],
-        ),
+        )),
       ),
     );
   }

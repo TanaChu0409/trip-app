@@ -211,7 +211,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
           builder: (context) => AlertDialog(
             title: Text(isArchived ? '封存旅程？' : '還原旅程？'),
             content: Text(isArchived
-                ? '封存後，所有成員只能從封存頁查看「${trip.title}」，且無法編輯或使用導航。'
+                ? '封存後，所有成員只能從封存頁查看「${trip.title}」，且無法編輯。'
                 : '還原後，「${trip.title}」會重新出現在一般旅程列表。'),
             actions: [
               TextButton(
@@ -350,10 +350,18 @@ class _CreateTripSheet extends StatefulWidget {
 class _CreateTripSheetState extends State<_CreateTripSheet> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
-  DateTime _startDate = DateTime(2026, 5, 1);
-  DateTime _endDate = DateTime(2026, 5, 3);
+  late DateTime _startDate;
+  late DateTime _endDate;
   String? _selectedColor = TripColors.defaultHex;
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _startDate = DateTime(now.year, now.month, now.day);
+    _endDate = DateTime(now.year, now.month, now.day + 5);
+  }
 
   @override
   void dispose() {
@@ -429,11 +437,13 @@ class _CreateTripSheetState extends State<_CreateTripSheet> {
 
   Future<void> _pickDate({required bool isStartDate}) async {
     final initialDate = isStartDate ? _startDate : _endDate;
+    final firstDate = DateTime(2025, 1, 1);
+    final lastDate = DateTime(_endDate.year + 5, 12, 31);
     final picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
-      firstDate: DateTime(2025, 1, 1),
-      lastDate: DateTime(2030, 12, 31),
+      firstDate: _startDate.isBefore(firstDate) ? _startDate : firstDate,
+      lastDate: lastDate,
     );
 
     if (picked == null) {

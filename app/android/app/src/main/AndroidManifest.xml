@@ -25,6 +25,13 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
             <!-- OAuth callback deep link for Google / Apple sign-in via Supabase -->
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="${inviteHost}" android:path="${invitePath}" />
+            </intent-filter>
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

@@ -28,8 +28,6 @@ shared_access
 | 瀏覽行程 | ✅ | ✅ |
 | 分享碼加入旅程 | ❌ | ✅ |
 | 查看分享碼 | ✅ | ❌ |
-| 地圖外開導航 | ✅ | ✅ |
-| 導航模式畫面 | ✅ | ✅ |
 | 新增 / 編輯 / 刪除停靠點 | ✅ | ❌ |
 | 停靠點排序 | ✅ | ❌ |
 | 刪除旅程 | ✅ | ❌ |
@@ -46,13 +44,11 @@ shared_access
 - `TripStore` 作為前端同步中的 state/store 層
 - `TripService` / `StopService` / `ParkingSpotService` 分別處理 trips、stops、parking_spots 的遠端資料操作
 - `NotificationService` 目前為記憶體 stub，僅追蹤 notification id，尚未真正接上 `flutter_local_notifications`
-- `NavigationModeScreen` 目前為導航模式 UI 佔位頁，尚未接入 `geolocator`
 
 ### Target
 
 - Drift 作為離線快取與 sync queue
 - `flutter_local_notifications` 處理時程提醒
-- `geolocator` 處理到點提醒與前景定位
 - Google / Apple Sign-In 作為 Email/Password 之後的登入擴充
 
 ## 3. Phase Plan
@@ -60,13 +56,13 @@ shared_access
 | Phase | 狀態 | 說明 |
 |---|---|---|
 | 1. Project setup and Supabase schema | 已完成 | Flutter 專案、主題、路由、Supabase migration 已建立 |
-| 2. Core app shell and routing | 已完成 | `/auth`、`/trips`、`/trips/:tripId`、停靠點表單、導航模式路由已接好 |
+| 2. Core app shell and routing | 已完成 | `/auth`、`/trips`、`/trips/:tripId`、停靠點表單路由已接好 |
 | 3. Authentication | 部分完成 | 已完成 Email/Password；Google/Apple 尚未實作 |
 | 4. Trip list and invite-code join flow | 已完成 | 旅程載入、建立旅程、分享碼加入、owner/shared 分組皆可用 |
-| 5. Trip detail browsing UI | 已完成 | 明細頁、天數 tabs、停靠點列表、分享碼顯示、外開地圖已可使用 |
+| 5. Trip detail browsing UI | 已完成 | 明細頁、天數 tabs、停靠點列表與分享碼顯示；地圖連結僅保留資料 |
 | 6. Owner editing flows, including delete-trip flow | 部分完成 | 已完成停靠點新增/編輯/刪除/排序、刪除旅程、退出分享；旅程資訊編輯與分享管理尚未完成 |
 | 7. Schedule reminder notifications | 進行中 | 目前只有 notification id 追蹤 stub，尚未實際排程系統通知 |
-| 8. Navigation mode and arrival reminder | 進行中 | 已有導航模式頁面與文案，尚未接入定位與到點判斷 |
+| 8. Navigation mode and arrival reminder | 已停用 | 旅程導航模式與地圖外開操作已停用；到點提醒尚未實作 |
 | 9. Offline support | 尚未開始 | Drift、同步佇列、衝突處理都還沒接線 |
 | 10. Polish, tests, and release prep | 進行中 | 目前只有少量 model / widget test，尚未覆蓋主要流程 |
 
@@ -88,7 +84,6 @@ shared_access
 - 尚未實作較強確認機制，例如輸入旅程名稱後才能刪除
 - 尚未接入 Drift，本機快取清理仍不存在
 - 尚未處理離線刪除佇列與回補
-- 尚未清理導航模式中的即時追蹤狀態，因為目前尚未真的啟用定位追蹤
 
 ### Current Permission Rules
 
@@ -130,14 +125,12 @@ shared_access
 - Owner 可新增、編輯、刪除、拖曳排序停靠點
 - 停靠點可編輯時間、備註、標籤、地圖連結、重點標記與多筆停車場資訊
 - 停靠點與停車場資訊皆直接寫入 Supabase
-- 地圖連結可使用外部地圖 App 開啟
+- 地圖連結資料仍會保存，但目前停用外開地圖操作
 - 已實作刪除旅程與退出分享旅程流程
 
 ### 已存在但仍是 Stub / Placeholder
 
 - `NotificationService` 只在記憶體中追蹤 reminder ids
-- `NavigationModeScreen` 只有導航模式示意 UI
-- `maps_url_parser.dart` 尚未成為完整導航整合流程的一部分
 
 ### 尚未完成
 
@@ -146,12 +139,11 @@ shared_access
 - 分享管理 UI，例如查看已加入成員、移除 guest
 - Drift 本機資料庫與離線瀏覽
 - 真正的本機通知排程與取消
-- geofence / 到點提醒 / 前景定位
 - 全面測試與 release 準備
 
 ## 5. Next Steps
 
-1. 補完 `flutter_local_notifications` 與 `geolocator`，把目前 notification / navigation stub 換成真正功能
+1. 補完 `flutter_local_notifications`，讓目前的 notification stub 實際排程系統通知
 2. 導入 Drift，建立離線快取、同步佇列與 pending delete / leave 機制
 3. 完成旅程層級的 owner 編輯流程，例如旅程標題、日期、封存與分享管理
 4. 補齊 delete / leave / join / stop CRUD 的 widget 與 integration tests
@@ -254,5 +246,4 @@ flutter build web --dart-define-from-file=app/.env
 1. `flutter analyze` 全綠
 2. delete / leave / join / stop CRUD 的完整 widget tests
 3. 提醒排程與取消的真正裝置驗證
-4. geolocator 導航模式與到點提醒整合驗證
-5. 離線模式與同步衝突驗證
+4. 離線模式與同步衝突驗證

@@ -204,7 +204,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
             Text('尚無協作成員', style: TextStyle(color: Colors.grey)),
             SizedBox(height: 4),
             Text(
-              '使用電子郵件邀請的成員會出現在此。',
+              '透過電子郵件或邀請連結加入的成員會出現在此。',
               style: TextStyle(color: Colors.grey, fontSize: 12),
             ),
           ],

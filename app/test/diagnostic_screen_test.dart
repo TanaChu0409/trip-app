@@ -10,13 +10,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:trip_planner_app/app.dart';
 import 'package:trip_planner_app/core/router/app_router.dart';
 import 'package:trip_planner_app/features/auth/data/auth_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:trip_planner_app/core/router/invite_link_controller.dart';
 
 void main() {
   testWidgets('diagnostic route is accessible before authentication',
       (tester) async {
     final auth = AuthStateListenable(const Stream.empty(), false);
+    SharedPreferences.setMockInitialValues({});
+    final invites = InviteLinkController(await SharedPreferences.getInstance());
     final container = ProviderContainer(overrides: [
       authStateListenableProvider.overrideWithValue(auth),
+      inviteLinkControllerProvider.overrideWithValue(invites),
     ]);
     await tester.pumpWidget(UncontrolledProviderScope(
         container: container, child: const TripPlannerApp()));
@@ -25,9 +30,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(DiagnosticScreen), findsOneWidget);
     expect(find.byType(AuthScreen), findsNothing);
+    await invites.remember('a' * 64);
+    await tester.pumpAndSettle();
+    expect(find.byType(DiagnosticScreen), findsOneWidget);
+    expect(invites.pendingRoute, '/invite/${'a' * 64}');
     await tester.pumpWidget(const SizedBox.shrink());
     container.dispose();
     auth.dispose();
+    invites.dispose();
   });
   testWidgets('login entry works without a session', (tester) async {
     await tester.pumpWidget(

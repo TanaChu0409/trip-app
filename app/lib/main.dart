@@ -4,6 +4,8 @@ import 'package:trip_planner_app/core/diagnostics/diagnostic_errors.dart';
 import 'package:trip_planner_app/core/diagnostics/diagnostic_observer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:trip_planner_app/core/router/invite_link_controller.dart';
 import 'package:trip_planner_app/app.dart';
 import 'package:trip_planner_app/core/supabase/supabase_config.dart';
 import 'package:trip_planner_app/core/supabase/supabase_error_formatter.dart';
@@ -14,8 +16,14 @@ Future<void> main() async {
   DiagnosticErrors.install();
 
   try {
+    // Supabase must receive cold-start OAuth links before the invite listener
+    // subscribes to AppLinks' shared broadcast stream.
     await DiagnosticLog.instance.trace('啟動', AppSupabaseConfig.initialize);
-    runApp(const ProviderScope(child: TripPlannerApp()));
+    final invites = InviteLinkController(await SharedPreferences.getInstance());
+    await invites.initialize();
+    runApp(ProviderScope(
+        overrides: [inviteLinkControllerProvider.overrideWithValue(invites)],
+        child: const TripPlannerApp()));
   } catch (error, stackTrace) {
     FlutterError.reportError(
       FlutterErrorDetails(

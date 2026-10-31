@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:trip_planner_app/features/trips/data/trip_invite_link.dart';
 import 'package:trip_planner_app/features/trips/data/invite_member_result.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_member.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
@@ -8,6 +9,15 @@ class TripService {
   TripService._();
 
   static final TripService instance = TripService._();
+
+  Future<TripInviteLinkResult> inviteLinkRpc(
+      String function, Map<String, dynamic> params) async {
+    final response = await _client.rpc(function, params: params);
+    if (response is! Map) {
+      throw const FormatException('Invalid invitation response');
+    }
+    return TripInviteLinkResult.fromJson(Map<String, dynamic>.from(response));
+  }
 
   SupabaseClient get _client => Supabase.instance.client;
 
@@ -328,6 +338,7 @@ class TripService {
               id: row['id'] as String,
               label: row['label'] as String? ?? '',
               dateLabel: '${date.month}/${date.day}',
+              date: date,
               subtitle: row['subtitle'] as String? ?? '',
               stops: stopsByDayId[row['id'] as String] ?? const [],
             ),
@@ -427,8 +438,8 @@ class TripService {
     required DateTime endDate,
   }) {
     final rows = <Map<String, dynamic>>[];
-    var current = DateTime(startDate.year, startDate.month, startDate.day);
-    final last = DateTime(endDate.year, endDate.month, endDate.day);
+    var current = DateTime.utc(startDate.year, startDate.month, startDate.day);
+    final last = DateTime.utc(endDate.year, endDate.month, endDate.day);
     var index = 0;
 
     while (!current.isAfter(last)) {
@@ -440,7 +451,7 @@ class TripService {
         'subtitle': index == 1 ? '從這一天開始安排行程。' : '這一天的詳細行程尚未建立。',
         'sort_order': index - 1,
       });
-      current = current.add(const Duration(days: 1));
+      current = DateTime.utc(current.year, current.month, current.day + 1);
     }
 
     return rows;
