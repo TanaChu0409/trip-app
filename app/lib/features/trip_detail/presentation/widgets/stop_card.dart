@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:trip_planner_app/core/theme/app_theme.dart';
 import 'package:trip_planner_app/features/trip_detail/presentation/widgets/stop_photo_image.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
@@ -156,6 +157,14 @@ class StopCard extends StatelessWidget {
                         ),
                       ),
                     ],
+                    if (stop.mapUrl?.trim().isNotEmpty ?? false) ...[
+                      const SizedBox(height: 12),
+                      FilledButton.tonalIcon(
+                        onPressed: () => _openMap(context, stop.mapUrl!),
+                        icon: const Icon(Icons.map_outlined),
+                        label: const Text('開啟地圖'),
+                      ),
+                    ],
                     if (stop.parkingSpots.isNotEmpty) ...[
                       const SizedBox(height: 14),
                       const Text(
@@ -187,6 +196,12 @@ class StopCard extends StatelessWidget {
                                   ),
                                 ),
                               ),
+                              if (parking.mapUrl.trim().isNotEmpty)
+                                TextButton(
+                                  onPressed: () =>
+                                      _openMap(context, parking.mapUrl),
+                                  child: const Text('導航'),
+                                ),
                             ],
                           ),
                         ),
@@ -207,6 +222,22 @@ class StopCard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _openMap(BuildContext context, String url) async {
+    try {
+      final opened = await launchUrl(
+        Uri.parse(url.trim()),
+        mode: LaunchMode.externalApplication,
+      );
+      if (opened) return;
+    } catch (_) {
+      // Show the same actionable feedback for invalid URLs and launch errors.
+    }
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('無法開啟地圖連結')),
     );
   }
 
