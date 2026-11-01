@@ -34,7 +34,11 @@ class StopService {
 
     final data = await _client.rpc(
       'update_stop_with_color_names',
-      params: {'p_stop_id': stopId, 'p_stop': stop.toJson()},
+      params: {
+        'p_stop_id': stopId,
+        'p_stop': stop.toJson(),
+        'p_color_names': colorNames,
+      },
     ).single();
 
     return StopItem.fromJson(Map<String, dynamic>.from(data));
