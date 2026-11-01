@@ -67,6 +67,42 @@ int selectedIndex(WidgetTester tester) =>
     tester.widget<TabBar>(find.byType(TabBar)).controller!.index;
 
 void main() {
+  testWidgets('day tabs show weekdays and scroll on narrow screens',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = FakeTripStore()
+      ..trip = makeTrip().copyWith(days: [
+        for (var index = 0; index < 4; index++)
+          TripDay(
+            id: 'day-$index',
+            label: ['第一天', '第二天', '第三天', '第四天'][index],
+            dateLabel: '12/${12 + index}',
+            date: index == 3 ? null : DateTime(2026, 12, 12 + index),
+            subtitle: '',
+            stops: [],
+          ),
+      ]);
+    await tester.pumpWidget(screen(store));
+    await tester.pumpAndSettle();
+
+    expect(find.text('第一天 · 12/12 (六)'), findsOneWidget);
+    expect(find.text('第二天 · 12/13 (日)'), findsOneWidget);
+    expect(find.text('第三天 · 12/14 (一)'), findsOneWidget);
+    expect(find.text('第四天 · 12/15'), findsOneWidget);
+    expect(tester.widget<TabBar>(find.byType(TabBar)).isScrollable, isTrue);
+    await tester.drag(find.byType(TabBar), const Offset(-600, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('第四天 · 12/15'));
+    await tester.pumpAndSettle();
+    expect(selectedIndex(tester), 3);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    store.dispose();
+  });
+
   for (final initiallyLoaded in [true, false]) {
     testWidgets('rebinds replacement store (loaded: $initiallyLoaded)',
         (tester) async {
@@ -132,7 +168,7 @@ void main() {
     store.update(makeTrip());
     await tester.pumpAndSettle();
     expect(selectedIndex(tester), 1);
-    await tester.tap(find.text('Day 2 · Date 2'));
+    await tester.tap(find.textContaining('Day 2 · Date 2'));
     await tester.pumpAndSettle();
     expect(selectedIndex(tester), 2);
     final navigator = tester.state<NavigatorState>(find.byType(Navigator));
@@ -148,7 +184,7 @@ void main() {
     store.update(store.trip!.copyWith(days: store.trip!.days.take(2).toList()));
     await tester.pumpAndSettle();
     expect(selectedIndex(tester), 1);
-    await tester.tap(find.text('Day 0 · Date 0'));
+    await tester.tap(find.textContaining('Day 0 · Date 0'));
     await tester.pumpAndSettle();
     expect(selectedIndex(tester), 0);
     await tester.pumpWidget(const SizedBox());
@@ -200,7 +236,7 @@ void main() {
     final store = FakeTripStore()..trip = makeTrip();
     await tester.pumpWidget(screen(store));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Day 2 · Date 2'));
+    await tester.tap(find.textContaining('Day 2 · Date 2'));
     await tester.pumpAndSettle();
     store.trip = makeTrip(id: 'other');
     await tester.pumpWidget(screen(store, id: 'other'));

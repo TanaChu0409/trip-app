@@ -32,6 +32,14 @@ class _TripDetailScreenState extends State<TripDetailScreen>
     with TickerProviderStateMixin {
   static const double _tabBarHeaderHeight = 56;
 
+  String _dayTabLabel(TripDay day) {
+    final label = '${day.label} · ${day.dateLabel}';
+    final date = day.date;
+    if (date == null) return label;
+    const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
+    return '$label (${weekdays[date.weekday - 1]})';
+  }
+
   late TabController _tabController;
   late TripStore _tripStore;
   bool _hasSelectedInitialDay = false;
@@ -285,7 +293,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                         isScrollable: true,
                         tabs: [
                           for (final day in trip.days)
-                            Tab(text: '${day.label} · ${day.dateLabel}'),
+                            Tab(text: _dayTabLabel(day)),
                         ],
                       ),
                     ),
