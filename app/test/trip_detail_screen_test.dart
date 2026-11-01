@@ -6,6 +6,18 @@ import 'package:trip_planner_app/features/trips/data/trip_store.dart';
 
 class FakeTripStore extends ChangeNotifier implements TripStore {
   TripSummary? trip;
+  int colorSaves = 0;
+  bool failColorSave = false;
+  Map<String, String>? savedNames;
+  @override
+  Future<bool> updateTripColor(String tripId, String? color,
+      {Map<String, String> colorNames = const {}}) async {
+    colorSaves++;
+    if (failColorSave) throw StateError('offline');
+    savedNames = Map.of(colorNames);
+    return true;
+  }
+
   bool get isObserved => hasListeners;
 
   void update(TripSummary value) {
@@ -67,6 +79,51 @@ int selectedIndex(WidgetTester tester) =>
     tester.widget<TabBar>(find.byType(TabBar)).controller!.index;
 
 void main() {
+  testWidgets(
+      'trip colour cancel discards and failed save preserves name for retry',
+      (tester) async {
+    final store = FakeTripStore()
+      ..trip = makeTrip(role: TripRole.owner)
+          .copyWith(color: '#123456', customColorNames: {'#123456': '原名'});
+    await tester.pumpWidget(screen(store));
+    await tester.pumpAndSettle();
+    Future<void> openColors() async {
+      await tester.tap(find.byTooltip('旅程操作'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('更改顏色'));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> rename(String name) async {
+      await tester.tap(find.text('修改名稱'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.byKey(const ValueKey('custom-color-name')), name);
+      await tester.tap(find.widgetWithText(FilledButton, '確認').last);
+      await tester.pumpAndSettle();
+    }
+
+    await openColors();
+    await rename('取消的名稱');
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(store.colorSaves, 0);
+    await openColors();
+    expect(find.text('原名'), findsOneWidget);
+    await rename('海洋藍');
+    store.failColorSave = true;
+    await tester.tap(find.widgetWithText(FilledButton, '確認'));
+    await tester.pumpAndSettle();
+    expect(find.text('更新顏色失敗，請重試'), findsOneWidget);
+    expect(find.text('海洋藍'), findsOneWidget);
+    store.failColorSave = false;
+    await tester.tap(find.widgetWithText(FilledButton, '確認'));
+    await tester.pumpAndSettle();
+    expect(store.savedNames, {'#123456': '海洋藍'});
+    expect(store.colorSaves, 2);
+    expect(find.text('更改旅程顏色'), findsNothing);
+  });
+
   for (final initiallyLoaded in [true, false]) {
     testWidgets('rebinds replacement store (loaded: $initiallyLoaded)',
         (tester) async {

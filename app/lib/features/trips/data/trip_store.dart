@@ -192,6 +192,7 @@ class TripStore extends ChangeNotifier {
     required String tripId,
     required String dayId,
     required StopItem stop,
+    Map<String, String> colorNames = const {},
   }) async {
     return DiagnosticLog.instance.trace('新增地點', () async {
       final location = _findEditableDayLocation(tripId, dayId);
@@ -201,7 +202,8 @@ class TripStore extends ChangeNotifier {
 
       final draft =
           _normalizeStopDraft(stop, sortOrder: location.day.stops.length);
-      final savedStop = await _saveStop(location.day.id, draft);
+      final savedStop =
+          await _saveStop(location.day.id, draft, colorNames: colorNames);
       final updatedStops = _normalizeStops([...location.day.stops, savedStop]);
       var updatedTrip = _replaceDayAt(
         location.trip,
@@ -210,6 +212,10 @@ class TripStore extends ChangeNotifier {
       );
       updatedTrip = _withSavedCustomStopColor(updatedTrip, savedStop.color);
 
+      updatedTrip = updatedTrip.copyWith(customColorNames: {
+        ...updatedTrip.customColorNames,
+        ...colorNames,
+      });
       updatedTrip = _commitTripUpdate(updatedTrip) ?? updatedTrip;
       await _withSessionGuard(
         () => _stopService.reorderStops(
@@ -229,6 +235,7 @@ class TripStore extends ChangeNotifier {
     required String tripId,
     required String dayId,
     required StopItem stop,
+    Map<String, String> colorNames = const {},
   }) async {
     return DiagnosticLog.instance.trace('更新地點', () async {
       final location = _findEditableDayLocation(tripId, dayId);
@@ -251,6 +258,7 @@ class TripStore extends ChangeNotifier {
       final savedStop = await _updateStopWithParking(
         previous: existingStop,
         next: draft,
+        colorNames: colorNames,
       );
 
       final nextStops = [...location.day.stops]..[stopIndex] = savedStop;
@@ -266,6 +274,10 @@ class TripStore extends ChangeNotifier {
         updatedTrip = _withSavedCustomStopColor(updatedTrip, savedStop.color);
       }
 
+      updatedTrip = updatedTrip.copyWith(customColorNames: {
+        ...updatedTrip.customColorNames,
+        ...colorNames,
+      });
       updatedTrip = _commitTripUpdate(updatedTrip) ?? updatedTrip;
       await _withSessionGuard(
         () => _stopService.reorderStops(
@@ -479,6 +491,7 @@ class TripStore extends ChangeNotifier {
     required DateTime startDate,
     required DateTime endDate,
     String? color,
+    Map<String, String> colorNames = const {},
   }) async {
     return DiagnosticLog.instance.trace('建立旅程', () async {
       final trip = await _withSessionGuardNoRetry(
@@ -487,6 +500,7 @@ class TripStore extends ChangeNotifier {
           startDate: startDate,
           endDate: endDate,
           color: color,
+          colorNames: colorNames,
         ),
       );
 
@@ -607,7 +621,8 @@ class TripStore extends ChangeNotifier {
     });
   }
 
-  Future<bool> updateTripColor(String tripId, String? color) async {
+  Future<bool> updateTripColor(String tripId, String? color,
+      {Map<String, String> colorNames = const {}}) async {
     return DiagnosticLog.instance.trace('更新旅程顏色', () async {
       final index = _trips.indexWhere(
         (trip) => trip.id == tripId && trip.canEdit,
@@ -616,9 +631,12 @@ class TripStore extends ChangeNotifier {
         return false;
       }
 
-      await _withSessionGuard(
-          () => _tripService.updateTripColor(tripId, color));
-      _trips[index] = _trips[index].copyWith(color: color);
+      await _withSessionGuard(() =>
+          _tripService.updateTripColor(tripId, color, colorNames: colorNames));
+      _trips[index] = _trips[index].copyWith(color: color, customColorNames: {
+        ..._trips[index].customColorNames,
+        ...colorNames,
+      });
       _persistSnapshotInBackground();
       notifyListeners();
       return true;
@@ -1263,11 +1281,13 @@ class TripStore extends ChangeNotifier {
     }
   }
 
-  Future<StopItem> _saveStop(String dayId, StopItem stop) async {
+  Future<StopItem> _saveStop(String dayId, StopItem stop,
+      {Map<String, String> colorNames = const {}}) async {
     final createdStop = await _withSessionGuardNoRetry(
       () => _stopService.createStop(
         dayId: dayId,
         stop: stop.copyWith(id: null, parkingSpots: const []),
+        colorNames: colorNames,
       ),
     );
     final parkingSpots = await _syncParkingSpots(
@@ -1285,13 +1305,15 @@ class TripStore extends ChangeNotifier {
   Future<StopItem> _updateStopWithParking({
     required StopItem previous,
     required StopItem next,
+    Map<String, String> colorNames = const {},
   }) async {
     if (next.id == null || next.id!.isEmpty) {
       throw StateError('Stop id is required for update.');
     }
 
     final updatedStop = await _withSessionGuard(
-      () => _stopService.updateStop(next.copyWith(parkingSpots: const [])),
+      () => _stopService.updateStop(next.copyWith(parkingSpots: const []),
+          colorNames: colorNames),
     );
     final parkingSpots = await _syncParkingSpots(
       stopId: next.id!,

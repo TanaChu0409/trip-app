@@ -68,6 +68,22 @@ links from another app on Android/iOS with the app closed and already running;
 also verify Google OAuth returns to the same invite confirmation screen.
 An iOS device can keep opening Safari based on its previous user preference.
 
+### Custom colour names
+
+Apply `supabase/migrations/20261031064640_custom_color_names.sql` before releasing
+the client. Trip and stop custom colours share names within each trip. Existing
+unnamed colours retain their hex labels; removing a saved stop swatch retains its
+name metadata. New names are required, trimmed and limited to 20 characters.
+Colour/name changes are staged until the form is saved. Stop and trip colour
+RPCs merge only changed names in the same transaction as the colour write.
+The existing RPCs remain available for older clients.
+
+Database regression coverage is in
+`supabase/tests/database/004_custom_color_names.test.sql` alongside the ACL tests.
+After applying the migration, verify a named trip colour and stop colour using
+an editor account, reload from a second member account, and confirm a viewer and
+an archived trip cannot write. Deploy the database migration before the App.
+
 ### Checks
 
 ```bash

@@ -28,7 +28,7 @@ class TripService {
     final ownedRows = await _client
         .from('trips')
         .select(
-            'id, title, start_date, end_date, share_code, color, custom_stop_colors, is_archived')
+            'id, title, start_date, end_date, share_code, color, custom_stop_colors, custom_color_names, is_archived')
         .eq('owner_id', userId)
         .eq('is_archived', isArchived)
         .order('start_date', ascending: false);
@@ -51,7 +51,7 @@ class TripService {
         : await _client
             .from('trips')
             .select(
-                'id, title, start_date, end_date, share_code, color, custom_stop_colors, is_archived')
+                'id, title, start_date, end_date, share_code, color, custom_stop_colors, custom_color_names, is_archived')
             .inFilter('id', sharedTripIds)
             .eq('is_archived', isArchived)
             .order('start_date', ascending: false);
@@ -72,6 +72,7 @@ class TripService {
     required DateTime startDate,
     required DateTime endDate,
     String? color,
+    Map<String, String> colorNames = const {},
   }) async {
     final userId = _requireUserId();
     final tripRow = await _client
@@ -82,9 +83,10 @@ class TripService {
           'end_date': _toIsoDate(endDate),
           'owner_id': userId,
           'color': color,
+          'custom_color_names': colorNames,
         })
         .select(
-            'id, title, start_date, end_date, share_code, color, custom_stop_colors')
+            'id, title, start_date, end_date, share_code, color, custom_stop_colors, custom_color_names')
         .single();
 
     final tripId = tripRow['id'] as String;
@@ -109,7 +111,7 @@ class TripService {
     final rows = await _client
         .from('trips')
         .select(
-            'id, title, start_date, end_date, share_code, owner_id, color, custom_stop_colors, is_archived')
+            'id, title, start_date, end_date, share_code, owner_id, color, custom_stop_colors, custom_color_names, is_archived')
         .eq('id', tripId)
         .limit(1);
 
@@ -203,14 +205,19 @@ class TripService {
     return rows.isNotEmpty;
   }
 
-  Future<void> updateTripColor(String tripId, String? color) async {
-    // Calls a SECURITY DEFINER RPC that only updates the color column.
+  Future<void> updateTripColor(String tripId, String? color,
+      {Map<String, String> colorNames = const {}}) async {
+    // Calls a SECURITY DEFINER RPC limited to colour and name metadata.
     // A direct table UPDATE is intentionally avoided: the previous
     // trips_editor_update_color RLS policy would have allowed editors to
     // overwrite any field (including owner_id), which the RPC prevents.
     await _client.rpc(
-      'update_trip_color',
-      params: {'p_trip_id': tripId, 'p_color': color},
+      'update_trip_color_with_names',
+      params: {
+        'p_trip_id': tripId,
+        'p_color': color,
+        'p_color_names': colorNames
+      },
     );
   }
 
@@ -359,6 +366,7 @@ class TripService {
             shareCode: row['share_code'] as String?,
             color: row['color'] as String?,
             customStopColors: _stringList(row['custom_stop_colors']),
+            customColorNames: parseCustomColorNames(row['custom_color_names']),
             permission: permissionByTripId[row['id'] as String],
             isArchived: row['is_archived'] as bool? ?? false,
           ),

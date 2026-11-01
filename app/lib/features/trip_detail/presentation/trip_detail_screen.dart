@@ -394,70 +394,88 @@ class _TripDetailScreenState extends State<TripDetailScreen>
 
   Future<void> _changeTripColor(BuildContext context, TripSummary trip) async {
     String? selectedColor = trip.color;
-
+    final colorNames = <String, String>{};
+    bool saving = false;
+    String? saveError;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                24,
-                24,
-                24,
-                MediaQuery.of(context).viewInsets.bottom + 24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    '更改旅程顏色',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 20),
-                  TripColorPicker(
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => PopScope(
+          canPop: !saving,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+                24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('更改旅程顏色', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 20),
+                AbsorbPointer(
+                  absorbing: saving,
+                  child: TripColorPicker(
                     selectedColor: selectedColor,
+                    savedCustomColors: trip.customStopColors,
+                    customColorNames: {...trip.customColorNames, ...colorNames},
+                    onColorNamed: (hex, name) => setSheetState(() {
+                      if (trip.customColorNames[hex] == name) {
+                        colorNames.remove(hex);
+                      } else {
+                        colorNames[hex] = name;
+                      }
+                    }),
                     onColorChanged: (value) =>
                         setSheetState(() => selectedColor = value),
-                    description: '選好顏色後，關閉此視窗即可儲存。',
+                    description: '選好顏色及名稱後，按確認儲存。',
                   ),
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('確認'),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    if (!context.mounted) {
-      return;
-    }
-
-    if (selectedColor == trip.color) {
-      return;
-    }
-
-    final updated = await _tripStore.updateTripColor(trip.id, selectedColor);
-    if (!context.mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(updated ? '已更新旅程顏色' : '更新顏色失敗'),
+                ),
+                if (saveError != null)
+                  Text(saveError!,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error)),
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          setSheetState(() {
+                            saving = true;
+                            saveError = null;
+                          });
+                          try {
+                            final updated = await _tripStore.updateTripColor(
+                                trip.id, selectedColor,
+                                colorNames: colorNames);
+                            if (!sheetContext.mounted) return;
+                            if (!updated) {
+                              throw StateError('更新顏色失敗');
+                            }
+                            Navigator.of(sheetContext).pop();
+                          } catch (_) {
+                            if (sheetContext.mounted) {
+                              setSheetState(() {
+                                saving = false;
+                                saveError = '更新顏色失敗，請重試';
+                              });
+                            }
+                          }
+                        },
+                  child: Text(saving ? '儲存中…' : '確認'),
+                ),
+                TextButton(
+                    onPressed:
+                        saving ? null : () => Navigator.of(sheetContext).pop(),
+                    child: const Text('取消')),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
