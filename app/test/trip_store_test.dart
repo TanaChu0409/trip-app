@@ -2,6 +2,30 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 
 void main() {
+  test('custom names survive cache and copy operations and remain per-trip',
+      () {
+    const trip = TripSummary(
+        id: 'a',
+        title: 'A',
+        dateRange: '',
+        role: TripRole.owner,
+        days: [],
+        color: '#123456',
+        customStopColors: ['#123456'],
+        customColorNames: {'#123456': '海洋藍'});
+    final restored = TripSummary.fromCacheJson(trip.toCacheJson());
+    expect(restored.customColorNames, {'#123456': '海洋藍'});
+    expect(
+        restored.copyWith(title: 'B').customColorNames, trip.customColorNames);
+    final renamed = restored.copyWith(customColorNames: {'#123456': '深海藍'});
+    expect(renamed.customColorNames['#123456'], '深海藍');
+    expect(trip.customColorNames['#123456'], '海洋藍');
+    expect(renamed.copyWith(customStopColors: []).customColorNames['#123456'],
+        '深海藍');
+    final legacy = trip.toCacheJson()..remove('custom_color_names');
+    expect(TripSummary.fromCacheJson(legacy).customColorNames, isEmpty);
+  });
+
   test('stop item json roundtrip preserves fields', () {
     const stop = StopItem(
       id: 'stop-1',

@@ -11,24 +11,34 @@ class StopService {
   Future<StopItem> createStop({
     required String dayId,
     required StopItem stop,
+    Map<String, String> colorNames = const {},
   }) async {
     final data = await _client.rpc(
-      'create_stop_with_palette',
-      params: {'p_day_id': dayId, 'p_stop': stop.toJson()},
+      'create_stop_with_color_names',
+      params: {
+        'p_day_id': dayId,
+        'p_stop': stop.toJson(),
+        'p_color_names': colorNames
+      },
     ).single();
 
     return StopItem.fromJson(Map<String, dynamic>.from(data));
   }
 
-  Future<StopItem> updateStop(StopItem stop) async {
+  Future<StopItem> updateStop(StopItem stop,
+      {Map<String, String> colorNames = const {}}) async {
     final stopId = stop.id;
     if (stopId == null || stopId.isEmpty) {
       throw ArgumentError('Stop id is required for update.');
     }
 
     final data = await _client.rpc(
-      'update_stop_with_palette',
-      params: {'p_stop_id': stopId, 'p_stop': stop.toJson()},
+      'update_stop_with_color_names',
+      params: {
+        'p_stop_id': stopId,
+        'p_stop': stop.toJson(),
+        'p_color_names': colorNames,
+      },
     ).single();
 
     return StopItem.fromJson(Map<String, dynamic>.from(data));

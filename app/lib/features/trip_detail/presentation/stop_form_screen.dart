@@ -44,6 +44,7 @@ class _StopFormScreenState extends State<StopFormScreen> {
   final ImagePicker _imagePicker = ImagePicker();
 
   String? _selectedColor;
+  final Map<String, String> _colorNameChanges = {};
   bool _isHighlight = false;
   bool _isSaving = false;
   bool _initialized = false;
@@ -251,6 +252,17 @@ class _StopFormScreenState extends State<StopFormScreen> {
                         showDefaultOption: true,
                         defaultLabel: '沿用旅程顏色',
                         savedCustomColors: trip.customStopColors,
+                        customColorNames: {
+                          ...trip.customColorNames,
+                          ..._colorNameChanges
+                        },
+                        onColorNamed: (hex, name) => setState(() {
+                          if (trip.customColorNames[hex] == name) {
+                            _colorNameChanges.remove(hex);
+                          } else {
+                            _colorNameChanges[hex] = name;
+                          }
+                        }),
                         onRemoveSavedCustomColor: (color) async {
                           try {
                             final removed =
@@ -559,12 +571,14 @@ class _StopFormScreenState extends State<StopFormScreen> {
             tripId: widget.tripId,
             dayId: widget.dayId,
             stop: stop,
+            colorNames: _colorNameChanges,
           );
         } else {
           savedStop = await _tripStore.addStop(
             tripId: widget.tripId,
             dayId: widget.dayId,
             stop: stop,
+            colorNames: _colorNameChanges,
           );
         }
 

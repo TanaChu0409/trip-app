@@ -353,6 +353,7 @@ class _CreateTripSheetState extends State<_CreateTripSheet> {
   late DateTime _startDate;
   late DateTime _endDate;
   String? _selectedColor = TripColors.defaultHex;
+  final Map<String, String> _colorNames = {};
   bool _isSubmitting = false;
 
   @override
@@ -418,6 +419,9 @@ class _CreateTripSheetState extends State<_CreateTripSheet> {
               const SizedBox(height: 18),
               TripColorPicker(
                 selectedColor: _selectedColor,
+                customColorNames: _colorNames,
+                onColorNamed: (hex, name) =>
+                    setState(() => _colorNames[hex] = name),
                 onColorChanged: (value) =>
                     setState(() => _selectedColor = value),
               ),
@@ -477,6 +481,7 @@ class _CreateTripSheetState extends State<_CreateTripSheet> {
         startDate: _startDate,
         endDate: _endDate,
         color: _selectedColor,
+        colorNames: _colorNames,
       );
 
       if (!mounted) {
