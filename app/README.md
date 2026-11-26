@@ -70,7 +70,7 @@ An iOS device can keep opening Safari based on its previous user preference.
 
 ### Custom colour names
 
-Apply `supabase/migrations/20261031064640_custom_color_names.sql` before releasing
+Apply `supabase/migrations/20261101065801_custom_color_names.sql` before releasing
 the client. Trip and stop custom colours share names within each trip. Existing
 unnamed colours retain their hex labels; removing a saved stop swatch retains its
 name metadata. New names are required, trimmed and limited to 20 characters.
