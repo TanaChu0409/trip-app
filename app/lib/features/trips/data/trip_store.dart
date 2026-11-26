@@ -644,14 +644,18 @@ class TripStore extends ChangeNotifier {
       final trip =
           await _withSessionGuard(() => _tripService.fetchTripById(tripId));
       if (token != _sessionToken || trip == null) return false;
-      final index = _trips.indexWhere((t) => t.id == tripId);
-      if (index == -1) return false;
-      _trips[index] = trip;
+      final current = findById(tripId);
+      if (current == null) return false;
+      final committed = _commitTripUpdate(
+        trip.copyWith(permission: current.permission),
+      );
+      if (committed == null) return false;
       _persistSnapshotInBackground();
       notifyListeners();
       await NotificationService.instance.cancelTripReminders(tripId);
-      if (token == _sessionToken && !trip.isArchived) {
-        await NotificationService.instance.scheduleTripReminders(trip);
+      final latest = findById(tripId);
+      if (token == _sessionToken && latest != null && !latest.isArchived) {
+        await NotificationService.instance.scheduleTripReminders(latest);
       }
       return true;
     } catch (_) {
