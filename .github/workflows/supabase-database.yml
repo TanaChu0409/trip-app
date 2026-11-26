@@ -1,6 +1,12 @@
 name: Supabase database
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase-database.yml"
   pull_request:
     paths:
       - "supabase/**"
@@ -41,3 +47,53 @@ jobs:
       - name: Stop local Supabase
         if: always()
         run: supabase stop --no-backup
+
+  deploy:
+    name: Deploy production migrations
+    needs: database
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: supabase-production
+    concurrency:
+      group: supabase-production-migrations
+      cancel-in-progress: false
+
+    env:
+      DO_NOT_TRACK: "1"
+      SUPABASE_TELEMETRY_DISABLED: "1"
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate deployment secrets
+        shell: bash
+        run: |
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_REF; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing GitHub secret $name"
+              exit 1
+            fi
+          done
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.119.0
+
+      - name: Link production project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Show migration history
+        run: supabase migration list --linked
+
+      - name: Preview pending migrations
+        run: supabase db push --linked --dry-run
+
+      - name: Apply pending migrations
+        run: supabase db push --linked --yes
+
+      - name: Show deployed migration history
+        run: supabase migration list --linked

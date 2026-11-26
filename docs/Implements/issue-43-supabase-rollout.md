@@ -1,7 +1,10 @@
 # Issue #43 Supabase production rollout
 
-This rollout is intentionally manual. The pull-request workflow validates a
-fresh local database only and never connects to the production project.
+The initial baseline repair described here is manual. Subsequent migrations
+are deployed automatically on Supabase changes merged into `main`; see
+[Supabase CI deployment](supabase-ci-deployment.md) for setup and recovery.
+The pull-request workflow validates a fresh local database only and never
+connects to the production project.
 
 ## Preconditions
 
@@ -15,7 +18,8 @@ fresh local database only and never connects to the production project.
 4. Link the CLI to the intended project and verify its project reference before
    running any write command.
 
-The remote migration history is currently empty. Do **not** run a normal
+At the time of this rollout, the remote migration history was empty. Check its
+current state before deploying. Do **not** run a normal
 `supabase db push` until the history has been repaired, because that would try
 to replay migrations `001` through `025` against an existing schema.
 
