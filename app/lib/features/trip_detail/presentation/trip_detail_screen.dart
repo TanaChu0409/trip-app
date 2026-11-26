@@ -8,7 +8,7 @@ import 'package:trip_planner_app/features/trip_detail/presentation/widgets/day_t
 import 'package:trip_planner_app/features/trips/data/invite_member_result.dart';
 import 'package:trip_planner_app/features/trips/data/models/trip_model.dart';
 import 'package:trip_planner_app/features/trips/data/trip_store.dart';
-import 'package:trip_planner_app/features/trips/presentation/widgets/trip_color_picker.dart';
+import 'package:trip_planner_app/features/trips/presentation/edit_trip_sheet.dart';
 
 class TripDetailScreen extends StatefulWidget {
   const TripDetailScreen({
@@ -336,8 +336,8 @@ class _TripDetailScreenState extends State<TripDetailScreen>
       case _TripDetailAction.leaveTrip:
         await _leaveTrip(context, trip);
         return;
-      case _TripDetailAction.changeColor:
-        await _changeTripColor(context, trip);
+      case _TripDetailAction.editTrip:
+        await _editTrip(context, trip);
         return;
       case _TripDetailAction.manageMembers:
         if (context.mounted) {
@@ -400,92 +400,25 @@ class _TripDetailScreenState extends State<TripDetailScreen>
     }
   }
 
-  Future<void> _changeTripColor(BuildContext context, TripSummary trip) async {
-    String? selectedColor = trip.color;
-    final colorNames = <String, String>{};
-    bool saving = false;
-    String? saveError;
+  Future<void> _editTrip(BuildContext context, TripSummary trip) async {
+    if (!trip.canEdit) return;
+    if (trip.resolvedStartDate == null || trip.resolvedEndDate == null) {
+      await _tripStore.reloadTrips();
+      if (!context.mounted) return;
+      trip = _tripStore.findById(trip.id) ?? trip;
+    }
+    if (!context.mounted) return;
+    if (trip.resolvedStartDate == null || trip.resolvedEndDate == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('無法取得旅程日期，請重新整理後再試。')));
+      return;
+    }
     await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      isDismissible: false,
-      enableDrag: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setSheetState) => PopScope(
-          canPop: !saving,
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(
-                24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('更改旅程顏色', style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 20),
-                AbsorbPointer(
-                  absorbing: saving,
-                  child: TripColorPicker(
-                    selectedColor: selectedColor,
-                    savedCustomColors: trip.customStopColors,
-                    customColorNames: {...trip.customColorNames, ...colorNames},
-                    onColorNamed: (hex, name) => setSheetState(() {
-                      if (trip.customColorNames[hex] == name) {
-                        colorNames.remove(hex);
-                      } else {
-                        colorNames[hex] = name;
-                      }
-                    }),
-                    onColorChanged: (value) =>
-                        setSheetState(() => selectedColor = value),
-                    description: '選好顏色及名稱後，按確認儲存。',
-                  ),
-                ),
-                if (saveError != null)
-                  Text(saveError!,
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.error)),
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: saving
-                      ? null
-                      : () async {
-                          setSheetState(() {
-                            saving = true;
-                            saveError = null;
-                          });
-                          try {
-                            final updated = await _tripStore.updateTripColor(
-                                trip.id, selectedColor,
-                                colorNames: colorNames);
-                            if (!sheetContext.mounted) return;
-                            if (!updated) {
-                              throw StateError('更新顏色失敗');
-                            }
-                            Navigator.of(sheetContext).pop();
-                          } catch (_) {
-                            if (sheetContext.mounted) {
-                              setSheetState(() {
-                                saving = false;
-                                saveError = '更新顏色失敗，請重試';
-                              });
-                            }
-                          }
-                        },
-                  child: Text(saving ? '儲存中…' : '確認'),
-                ),
-                TextButton(
-                    onPressed:
-                        saving ? null : () => Navigator.of(sheetContext).pop(),
-                    child: const Text('取消')),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+        context: context,
+        isScrollControlled: true,
+        isDismissible: false,
+        enableDrag: false,
+        builder: (_) => EditTripSheet(trip: trip, store: _tripStore));
   }
 
   Future<void> _deleteTrip(BuildContext context, TripSummary trip) async {
@@ -596,7 +529,7 @@ enum _TripDetailAction {
   restoreTrip,
   deleteTrip,
   leaveTrip,
-  changeColor,
+  editTrip,
   manageMembers,
 }
 
@@ -665,7 +598,7 @@ class _TripHeader extends StatelessWidget {
         icon: const Icon(Icons.more_vert_rounded),
       );
     }
-    // Owner: can manage members, change color, delete trip
+    // Owner: can manage members, edit trip details, archive and delete.
     if (trip.role == TripRole.owner) {
       return PopupMenuButton<_TripDetailAction>(
         tooltip: '旅程操作',
@@ -676,8 +609,8 @@ class _TripHeader extends StatelessWidget {
             child: Text('成員管理'),
           ),
           PopupMenuItem(
-            value: _TripDetailAction.changeColor,
-            child: Text('更改顏色'),
+            value: _TripDetailAction.editTrip,
+            child: Text('編輯旅程'),
           ),
           PopupMenuItem(
             value: _TripDetailAction.archiveTrip,
@@ -692,15 +625,15 @@ class _TripHeader extends StatelessWidget {
       );
     }
 
-    // Editor guest: can change color and leave
+    // Editor guest: can edit trip details and leave.
     if (trip.permission == TripPermission.editor) {
       return PopupMenuButton<_TripDetailAction>(
         tooltip: '旅程操作',
         onSelected: onActionSelected,
         itemBuilder: (context) => const [
           PopupMenuItem(
-            value: _TripDetailAction.changeColor,
-            child: Text('更改顏色'),
+            value: _TripDetailAction.editTrip,
+            child: Text('編輯旅程'),
           ),
           PopupMenuItem(
             value: _TripDetailAction.leaveTrip,
@@ -781,7 +714,7 @@ class _TripSummaryCard extends StatelessWidget {
                   : switch (trip.role) {
                       TripRole.owner => '你是旅程擁有者，可新增、編輯、刪除與排序地點。',
                       TripRole.guest => trip.permission == TripPermission.editor
-                          ? '協作模式，可新增、編輯、刪除行程地點與更改顏色。'
+                          ? '協作模式，可新增、編輯、刪除行程地點與修改旅程資料。'
                           : '你目前僅限查看此旅程，可瀏覽行程與地點資訊。',
                     },
             ),

@@ -340,6 +340,8 @@ class TripSummary {
     required this.role,
     required this.days,
     this.shareCode,
+    this.startDate,
+    this.endDate,
     this.sharedFromTripId,
     this.color,
     this.customStopColors = const [],
@@ -351,6 +353,13 @@ class TripSummary {
   final String id;
   final String title;
   final String dateRange;
+  final DateTime? startDate;
+  final DateTime? endDate;
+
+  DateTime? get resolvedStartDate =>
+      startDate ?? (days.isEmpty ? null : days.first.date);
+  DateTime? get resolvedEndDate =>
+      endDate ?? (days.isEmpty ? null : days.last.date);
   final TripRole role;
   final List<TripDay> days;
   final String? shareCode;
@@ -375,6 +384,8 @@ class TripSummary {
     String? id,
     String? title,
     String? dateRange,
+    DateTime? startDate,
+    DateTime? endDate,
     TripRole? role,
     List<TripDay>? days,
     String? shareCode,
@@ -389,6 +400,8 @@ class TripSummary {
       id: id ?? this.id,
       title: title ?? this.title,
       dateRange: dateRange ?? this.dateRange,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
       role: role ?? this.role,
       days: days ?? this.days,
       shareCode: shareCode ?? this.shareCode,
@@ -408,6 +421,8 @@ class TripSummary {
       'id': id,
       'title': title,
       'date_range': dateRange,
+      'start_date': resolvedStartDate?.toIso8601String(),
+      'end_date': resolvedEndDate?.toIso8601String(),
       'role': role.name,
       'days': [
         for (final day in days) day.toCacheJson(),
@@ -432,6 +447,8 @@ class TripSummary {
       id: json['id'] as String? ?? '',
       title: json['title'] as String? ?? '',
       dateRange: json['date_range'] as String? ?? '',
+      startDate: DateTime.tryParse(json['start_date'] as String? ?? ''),
+      endDate: DateTime.tryParse(json['end_date'] as String? ?? ''),
       role: role,
       days: [
         for (final dayJson in _jsonMapList(json['days']))

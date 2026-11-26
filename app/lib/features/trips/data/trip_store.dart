@@ -621,6 +621,44 @@ class TripStore extends ChangeNotifier {
     });
   }
 
+  /// Returns false only when the write succeeded but refreshing failed.
+  Future<bool> updateTripDetails(
+    String tripId, {
+    required String title,
+    required DateTime startDate,
+    required DateTime endDate,
+    required String? color,
+    Map<String, String> colorNames = const {},
+  }) async {
+    final token = _sessionToken;
+    if (findById(tripId)?.canEdit != true) {
+      throw StateError('你目前沒有編輯此旅程的權限。');
+    }
+    await _withSessionGuardNoRetry(() => _tripService.updateTripDetails(tripId,
+        title: title,
+        startDate: startDate,
+        endDate: endDate,
+        color: color,
+        colorNames: colorNames));
+    try {
+      final trip =
+          await _withSessionGuard(() => _tripService.fetchTripById(tripId));
+      if (token != _sessionToken || trip == null) return false;
+      final index = _trips.indexWhere((t) => t.id == tripId);
+      if (index == -1) return false;
+      _trips[index] = trip;
+      _persistSnapshotInBackground();
+      notifyListeners();
+      await NotificationService.instance.cancelTripReminders(tripId);
+      if (token == _sessionToken && !trip.isArchived) {
+        await NotificationService.instance.scheduleTripReminders(trip);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> updateTripColor(String tripId, String? color,
       {Map<String, String> colorNames = const {}}) async {
     return DiagnosticLog.instance.trace('更新旅程顏色', () async {

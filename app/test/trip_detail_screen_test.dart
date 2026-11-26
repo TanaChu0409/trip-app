@@ -9,12 +9,18 @@ class FakeTripStore extends ChangeNotifier implements TripStore {
   int colorSaves = 0;
   bool failColorSave = false;
   Map<String, String>? savedNames;
+  String? savedTitle;
   @override
-  Future<bool> updateTripColor(String tripId, String? color,
-      {Map<String, String> colorNames = const {}}) async {
+  Future<bool> updateTripDetails(String tripId,
+      {required String title,
+      required DateTime startDate,
+      required DateTime endDate,
+      required String? color,
+      Map<String, String> colorNames = const {}}) async {
     colorSaves++;
     if (failColorSave) throw StateError('offline');
     savedNames = Map.of(colorNames);
+    savedTitle = title;
     return true;
   }
 
@@ -79,6 +85,61 @@ int selectedIndex(WidgetTester tester) =>
     tester.widget<TabBar>(find.byType(TabBar)).controller!.index;
 
 void main() {
+  for (final permission in [TripPermission.editor, TripPermission.viewer]) {
+    testWidgets('edit entry respects guest permission $permission',
+        (tester) async {
+      final store = FakeTripStore()
+        ..trip = makeTrip().copyWith(permission: permission);
+      await tester.pumpWidget(screen(store));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('旅程操作'));
+      await tester.pumpAndSettle();
+      expect(find.text('編輯旅程'),
+          permission == TripPermission.editor ? findsOneWidget : findsNothing);
+    });
+  }
+  testWidgets('archived owner cannot edit metadata', (tester) async {
+    final store = FakeTripStore()
+      ..trip = makeTrip(role: TripRole.owner, archived: true);
+    await tester.pumpWidget(screen(store));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('旅程操作'));
+    await tester.pumpAndSettle();
+    expect(find.text('編輯旅程'), findsNothing);
+  });
+  testWidgets('edit validates title and submits trimmed name', (tester) async {
+    final store = FakeTripStore()..trip = makeTrip(role: TripRole.owner);
+    await tester.pumpWidget(screen(store));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('旅程操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('編輯旅程'));
+    await tester.pumpAndSettle();
+    expect(find.text('Test trip'), findsWidgets);
+    await tester.enterText(find.byType(TextFormField), '  ');
+    await tester.tap(find.widgetWithText(FilledButton, '儲存'));
+    await tester.pumpAndSettle();
+    expect(find.text('請輸入旅程名稱'), findsOneWidget);
+    expect(store.colorSaves, 0);
+    await tester.enterText(find.byType(TextFormField), '  新名稱  ');
+    await tester.tap(find.widgetWithText(FilledButton, '儲存'));
+    await tester.pumpAndSettle();
+    expect(store.savedTitle, '新名稱');
+    expect(store.colorSaves, 1);
+  });
+  test('trip date cache supports explicit and legacy dates', () {
+    final trip = makeTrip().copyWith(
+        startDate: DateTime(2026, 1, 1), endDate: DateTime(2026, 1, 3));
+    final json = trip.toCacheJson();
+    expect(TripSummary.fromCacheJson(json).resolvedStartDate,
+        DateTime(2026, 1, 1));
+    json.remove('start_date');
+    json.remove('end_date');
+    final legacy = TripSummary.fromCacheJson(json);
+    expect(legacy.resolvedStartDate, trip.days.first.date);
+    expect(legacy.resolvedEndDate, trip.days.last.date);
+  });
+
   testWidgets('day tabs show weekdays and scroll on narrow screens',
       (tester) async {
     tester.view.physicalSize = const Size(320, 800);
@@ -126,7 +187,7 @@ void main() {
     Future<void> openColors() async {
       await tester.tap(find.byTooltip('旅程操作'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('更改顏色'));
+      await tester.tap(find.text('編輯旅程'));
       await tester.pumpAndSettle();
     }
 
@@ -148,16 +209,16 @@ void main() {
     expect(find.text('原名'), findsOneWidget);
     await rename('海洋藍');
     store.failColorSave = true;
-    await tester.tap(find.widgetWithText(FilledButton, '確認'));
+    await tester.tap(find.widgetWithText(FilledButton, '儲存'));
     await tester.pumpAndSettle();
-    expect(find.text('更新顏色失敗，請重試'), findsOneWidget);
+    expect(find.text('操作失敗，請稍後再試。'), findsOneWidget);
     expect(find.text('海洋藍'), findsOneWidget);
     store.failColorSave = false;
-    await tester.tap(find.widgetWithText(FilledButton, '確認'));
+    await tester.tap(find.widgetWithText(FilledButton, '儲存'));
     await tester.pumpAndSettle();
     expect(store.savedNames, {'#123456': '海洋藍'});
     expect(store.colorSaves, 2);
-    expect(find.text('更改旅程顏色'), findsNothing);
+    expect(find.text('編輯旅程'), findsNothing);
   });
 
   for (final initiallyLoaded in [true, false]) {
