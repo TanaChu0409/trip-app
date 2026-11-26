@@ -205,6 +205,24 @@ class TripService {
     return rows.isNotEmpty;
   }
 
+  Future<void> updateTripDetails(
+    String tripId, {
+    required String title,
+    required DateTime startDate,
+    required DateTime endDate,
+    required String? color,
+    Map<String, String> colorNames = const {},
+  }) async {
+    await _client.rpc('update_trip_details', params: {
+      'p_trip_id': tripId,
+      'p_title': title.trim(),
+      'p_start_date': _toIsoDate(startDate),
+      'p_end_date': _toIsoDate(endDate),
+      'p_color': color,
+      'p_color_names': colorNames,
+    });
+  }
+
   Future<void> updateTripColor(String tripId, String? color,
       {Map<String, String> colorNames = const {}}) async {
     // Calls a SECURITY DEFINER RPC limited to colour and name metadata.
@@ -357,6 +375,8 @@ class TripService {
           (row) => TripSummary(
             id: row['id'] as String,
             title: row['title'] as String? ?? '',
+            startDate: DateTime.parse(row['start_date'] as String),
+            endDate: DateTime.parse(row['end_date'] as String),
             dateRange: _formatRange(
               DateTime.parse(row['start_date'] as String),
               DateTime.parse(row['end_date'] as String),

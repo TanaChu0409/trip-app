@@ -118,6 +118,7 @@ with functions(signature, access_class) as (
     ('public.resolve_trip_invite_link(text,boolean)', 'internal'),
     ('public.revoke_invite_on_archive()', 'internal'),
     ('public.invite_member_by_email(uuid,text,text)', 'app_rpc'),
+    ('public.update_trip_details(uuid,text,date,date,text,jsonb)', 'authenticated_rpc'),
     ('public.update_trip_color(uuid,text)', 'app_rpc'),
     ('public.update_trip_color_with_names(uuid,text,jsonb)', 'app_rpc'),
     ('public.create_stop_with_color_names(uuid,jsonb,jsonb)', 'app_rpc'),
@@ -152,7 +153,7 @@ with functions(signature, access_class) as (
     role_name,
     (
       (access_class = 'app_rpc' and role_name in ('authenticated', 'service_role'))
-      or (access_class = 'policy_helper' and role_name = 'authenticated')
+      or (access_class in ('policy_helper', 'authenticated_rpc') and role_name = 'authenticated')
       or (
         signature = 'public.can_read_trip_peer_profile(uuid,uuid)'
         and role_name = 'service_role'
